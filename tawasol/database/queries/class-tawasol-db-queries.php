@@ -1,12 +1,12 @@
 <?php
 /**
- * Database handler for messaging operations.
+ * Database queries handler.
  *
  * @package           Tawasol
- * @subpackage        Tawasol/database
+ * @subpackage        Tawasol/database/queries
  */
 
-class Tawasol_DB_Messenger {
+class Tawasol_DB_Queries {
 
     private $table_conversations;
     private $table_messages;
@@ -22,7 +22,7 @@ class Tawasol_DB_Messenger {
     public function get_user_conversations( $user_id ) {
         global $wpdb;
         return $wpdb->get_results( $wpdb->prepare(
-            "SELECT c.*,
+            "SELECT c.*, p.is_archived,
                 (SELECT user_id FROM $this->table_participants p2 WHERE p2.conversation_id = c.id AND p2.user_id != %d LIMIT 1) as other_user_id
              FROM $this->table_conversations c
              JOIN $this->table_participants p ON c.id = p.conversation_id
@@ -48,47 +48,6 @@ class Tawasol_DB_Messenger {
         ) );
     }
 
-    public function insert_message( $data ) {
-        global $wpdb;
-        $wpdb->query( 'START TRANSACTION' );
-        $inserted = $wpdb->insert( $this->table_messages, $data );
-        if ( false === $inserted ) {
-            $wpdb->query( 'ROLLBACK' );
-            return false;
-        }
-        $insert_id = $wpdb->insert_id;
-        $wpdb->query( 'COMMIT' );
-        return $insert_id;
-    }
-
-    public function mark_delivered( $msg_ids ) {
-        global $wpdb;
-        if ( empty( $msg_ids ) ) return;
-        $ids_placeholder = implode( ',', array_fill( 0, count( $msg_ids ), '%d' ) );
-        return $wpdb->query( $wpdb->prepare(
-            "UPDATE $this->table_messages SET status = 'delivered' WHERE id IN ($ids_placeholder)",
-            ...$msg_ids
-        ) );
-    }
-
-    public function create_conversation( $title, $type ) {
-        global $wpdb;
-        $wpdb->insert( $this->table_conversations, array(
-            'title' => $title,
-            'type'  => $type,
-        ) );
-        return $wpdb->insert_id;
-    }
-
-    public function add_participant( $conversation_id, $user_id, $is_admin = 0 ) {
-        global $wpdb;
-        return $wpdb->insert( $this->table_participants, array(
-            'conversation_id' => $conversation_id,
-            'user_id'         => $user_id,
-            'is_admin'        => $is_admin,
-        ) );
-    }
-
     public function get_recent_messages_for_user( $user_id, $limit = 500 ) {
         global $wpdb;
         return $wpdb->get_results( $wpdb->prepare(
@@ -97,6 +56,18 @@ class Tawasol_DB_Messenger {
              WHERE p.user_id = %d
              ORDER BY m.created_at DESC LIMIT %d",
             $user_id, $limit
+        ) );
+    }
+
+    public function find_existing_one_on_one( $user_a, $user_b ) {
+        global $wpdb;
+        return $wpdb->get_var( $wpdb->prepare(
+            "SELECT p1.conversation_id
+             FROM $this->table_participants p1
+             JOIN $this->table_participants p2 ON p1.conversation_id = p2.conversation_id
+             JOIN $this->table_conversations c ON p1.conversation_id = c.id
+             WHERE c.type = 'one-on-one' AND p1.user_id = %d AND p2.user_id = %d",
+            $user_a, $user_b
         ) );
     }
 }

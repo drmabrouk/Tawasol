@@ -16,6 +16,8 @@
         <h2 class="nav-tab-wrapper" style="margin-bottom: 0;">
             <a href="#users" class="nav-tab nav-tab-active"><?php _e( 'Users', 'tawasol' ); ?></a>
             <a href="#logs" class="nav-tab"><?php _e( 'Security Logs', 'tawasol' ); ?></a>
+            <a href="#sessions" class="nav-tab"><?php _e( 'Active Sessions', 'tawasol' ); ?></a>
+            <a href="#delivery" class="nav-tab"><?php _e( 'Delivery Reports', 'tawasol' ); ?></a>
             <a href="#analytics" class="nav-tab"><?php _e( 'Analytics', 'tawasol' ); ?></a>
         </h2>
         <button id="tawasol-launch-chat-admin" class="button button-primary"><?php _e( 'Open Full-Screen Chat', 'tawasol' ); ?></button>
@@ -98,6 +100,67 @@
                             <td>" . esc_html( $username ) . "</td>
                             <td>" . esc_html( $log->ip_address ) . "</td>
                             <td>" . esc_html( $log->description ) . "</td>
+                        </tr>";
+                    }
+                    ?>
+                </tbody>
+            </table>
+        </div>
+
+        <div id="sessions-section" style="display:none;">
+            <h3><?php _e( 'Active Sessions', 'tawasol' ); ?></h3>
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <th><?php _e( 'User', 'tawasol' ); ?></th>
+                        <th><?php _e( 'IP Address', 'tawasol' ); ?></th>
+                        <th><?php _e( 'Last Activity', 'tawasol' ); ?></th>
+                        <th><?php _e( 'User Agent', 'tawasol' ); ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                    global $wpdb;
+                    $table_sessions = $wpdb->prefix . 'tawasol_sessions';
+                    $sessions = $wpdb->get_results( "SELECT * FROM $table_sessions ORDER BY last_activity DESC LIMIT 50" );
+                    foreach ( $sessions as $session ) {
+                        $user = get_userdata( $session->user_id );
+                        $username = $user ? $user->user_login : 'Unknown';
+                        echo "<tr>
+                            <td>" . esc_html( $username ) . "</td>
+                            <td>" . esc_html( $session->ip_address ) . "</td>
+                            <td>" . esc_html( $session->last_activity ) . "</td>
+                            <td><small>" . esc_html( substr($session->user_agent, 0, 100) ) . "...</small></td>
+                        </tr>";
+                    }
+                    ?>
+                </tbody>
+            </table>
+        </div>
+
+        <div id="delivery-section" style="display:none;">
+            <h3><?php _e( 'Message Delivery Reports', 'tawasol' ); ?></h3>
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <th><?php _e( 'ID', 'tawasol' ); ?></th>
+                        <th><?php _e( 'Sender', 'tawasol' ); ?></th>
+                        <th><?php _e( 'Status', 'tawasol' ); ?></th>
+                        <th><?php _e( 'Sent At', 'tawasol' ); ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                    $table_messages = $wpdb->prefix . 'tawasol_messages';
+                    $messages = $wpdb->get_results( "SELECT * FROM $table_messages ORDER BY created_at DESC LIMIT 50" );
+                    foreach ( $messages as $msg ) {
+                        $sender = get_userdata( $msg->sender_id );
+                        $status_color = ($msg->status === 'read') ? 'green' : (($msg->status === 'delivered') ? 'blue' : 'gray');
+                        echo "<tr>
+                            <td>" . intval( $msg->id ) . "</td>
+                            <td>" . esc_html( $sender ? $sender->user_login : 'Unknown' ) . "</td>
+                            <td><span style='color:$status_color; font-weight:bold;'>" . esc_html( strtoupper($msg->status) ) . "</span></td>
+                            <td>" . esc_html( $msg->created_at ) . "</td>
                         </tr>";
                     }
                     ?>

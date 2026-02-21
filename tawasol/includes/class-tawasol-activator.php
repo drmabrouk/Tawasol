@@ -51,6 +51,7 @@ class Tawasol_Activator {
 			user_id bigint(20) NOT NULL,
 			last_read_at datetime DEFAULT CURRENT_TIMESTAMP,
 			is_admin tinyint(1) DEFAULT 0 NOT NULL,
+			is_archived tinyint(1) DEFAULT 0 NOT NULL,
 			PRIMARY KEY  (conversation_id, user_id),
 			KEY user_id (user_id)
 		) $charset_collate;";

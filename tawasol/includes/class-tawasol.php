@@ -63,12 +63,13 @@ class Tawasol {
 		require_once $plugin_dir . 'modules/chat/class-tawasol-chat-engine.php';
 
 		// Database
-		require_once $plugin_dir . 'database/class-tawasol-db-messenger.php';
+		require_once $plugin_dir . 'database/queries/class-tawasol-db-queries.php';
+		require_once $plugin_dir . 'database/transactions/class-tawasol-db-transactions.php';
 
 		// UI / API
 		require_once $plugin_dir . 'admin/class-tawasol-admin.php';
 		require_once $plugin_dir . 'public/class-tawasol-public.php';
-		require_once $plugin_dir . 'api/class-tawasol-api.php';
+		require_once $plugin_dir . 'api/v1/class-tawasol-api-v1.php';
 
 		$this->loader = new Tawasol_Loader();
 	}
@@ -94,7 +95,7 @@ class Tawasol {
 	}
 
 	private function define_api_hooks() {
-		$plugin_api = new Tawasol_API( $this->get_plugin_name(), $this->get_version() );
+		$plugin_api = new Tawasol_API_V1( $this->get_plugin_name(), $this->get_version() );
 		$this->loader->add_action( 'rest_api_init', $plugin_api, 'register_routes' );
 	}
 

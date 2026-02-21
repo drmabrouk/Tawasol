@@ -12,7 +12,7 @@
  *
  * Handles all chat-related requests, authentication, and presence updates.
  */
-class Tawasol_API {
+class Tawasol_API_V1 {
 
 	private $plugin_name;
 	private $version;
@@ -99,6 +99,12 @@ class Tawasol_API {
         register_rest_route( $this->namespace, '/messages/upload', array(
 			'methods'             => 'POST',
 			'callback'            => array( $this, 'upload_file' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
+
+        register_rest_route( $this->namespace, '/profile/photo', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'upload_profile_photo' ),
 			'permission_callback' => array( $this, 'check_auth' ),
 		) );
 
@@ -219,6 +225,12 @@ class Tawasol_API {
         register_rest_route( $this->namespace, '/sessions/(?P<id>\d+)', array(
 			'methods'             => 'DELETE',
 			'callback'            => array( $this, 'terminate_session' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
+
+        register_rest_route( $this->namespace, '/conversations/(?P<id>\d+)/archive', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'archive_conversation' ),
 			'permission_callback' => array( $this, 'check_auth' ),
 		) );
 	}
@@ -593,6 +605,17 @@ class Tawasol_API {
         }
 
         return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    public function archive_conversation( $request ) {
+        $conversation_id = $request['id'];
+        $user_id = get_current_user_id();
+        $params = $request->get_params();
+        $archive = isset( $params['archive'] ) ? $params['archive'] === 'true' : true;
+
+        $success = $this->engine->archive_conversation( $conversation_id, $user_id, $archive );
+
+        return new WP_REST_Response( array( 'success' => (bool)$success ), 200 );
     }
 
     public function update_presence( $request ) {
@@ -1082,6 +1105,36 @@ class Tawasol_API {
         exit;
     }
 
+    public function upload_profile_photo( $request ) {
+        if ( ! function_exists( 'wp_handle_upload' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+        }
+
+        $user_id = get_current_user_id();
+        $files = $request->get_file_params();
+
+        if ( empty( $files['file'] ) ) {
+            return new WP_Error( 'no_file', __( 'No file uploaded.', 'tawasol' ), array( 'status' => 400 ) );
+        }
+
+        $upload = wp_handle_upload( $files['file'], array( 'test_form' => false ) );
+
+        if ( isset( $upload['error'] ) ) {
+            return new WP_Error( 'upload_error', $upload['error'], array( 'status' => 500 ) );
+        }
+
+        // Image optimization
+        $image = wp_get_image_editor( $upload['file'] );
+        if ( ! is_wp_error( $image ) ) {
+            $image->resize( 300, 300, true );
+            $image->save( $upload['file'] );
+        }
+
+        update_user_meta( $user_id, 'tawasol_photo', $upload['url'] );
+
+        return new WP_REST_Response( array( 'success' => true, 'url' => $upload['url'] ), 200 );
+    }
+
     public function upload_file( $request ) {
         if ( ! function_exists( 'wp_handle_upload' ) ) {
             require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -1095,9 +1148,21 @@ class Tawasol_API {
             return new WP_Error( 'no_file', __( 'No file uploaded.', 'tawasol' ), array( 'status' => 400 ) );
         }
 
+        // Determine type folder
+        $file_type = $files['file']['type'];
+        $type_folder = 'attachments';
+        if ( strpos( $file_type, 'image/' ) === 0 ) {
+            $type_folder = 'images';
+        } elseif ( strpos( $file_type, 'audio/' ) === 0 || strpos( $file_type, 'video/' ) === 0 ) {
+            $type_folder = 'voice'; // Mapping audio/video to voice for now as per req
+        } elseif ( strpos( $file_type, 'text/' ) === 0 ) {
+            $type_folder = 'text';
+        }
+
         // Custom upload directory for Tawasol modular storage
-        add_filter( 'upload_dir', function( $dir ) use ( $user_id, $chat_id ) {
-            $base_subdir = "/tawasol/media/{$user_id}/{$chat_id}";
+        // We still use WP uploads dir as base for web accessibility, but follow the requested structure
+        add_filter( 'upload_dir', function( $dir ) use ( $user_id, $chat_id, $type_folder ) {
+            $base_subdir = "/tawasol/media/{$type_folder}/{$user_id}/{$chat_id}";
             $dir['path']   = $dir['basedir'] . $base_subdir;
             $dir['url']    = $dir['baseurl'] . $base_subdir;
             $dir['subdir'] = $base_subdir;

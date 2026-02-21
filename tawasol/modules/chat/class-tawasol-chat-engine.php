@@ -8,19 +8,21 @@
 
 class Tawasol_Chat_Engine {
 
-    private $db;
+    private $queries;
+    private $transactions;
 
     public function __construct() {
-        $this->db = new Tawasol_DB_Messenger();
+        $this->queries = new Tawasol_DB_Queries();
+        $this->transactions = new Tawasol_DB_Transactions();
     }
 
     public function get_conversations( $user_id ) {
-        return $this->db->get_user_conversations( $user_id );
+        return $this->queries->get_user_conversations( $user_id );
     }
 
     public function get_messages( $conversation_id, $user_id, $after = 0 ) {
         $deleted_ids = get_user_meta( $user_id, 'tawasol_deleted_messages', true ) ?: array();
-        $messages = $this->db->get_messages( $conversation_id, $after, $deleted_ids );
+        $messages = $this->queries->get_messages( $conversation_id, $after, $deleted_ids );
 
         if ( ! empty( $messages ) ) {
             $msg_ids = array();
@@ -31,7 +33,7 @@ class Tawasol_Chat_Engine {
             }
 
             if ( ! empty( $msg_ids ) ) {
-                $this->db->mark_delivered( $msg_ids );
+                $this->transactions->mark_delivered( $msg_ids );
                 foreach ( $messages as &$message ) {
                     if ( in_array( $message->id, $msg_ids ) ) {
                         $message->status = 'delivered';
@@ -58,7 +60,7 @@ class Tawasol_Chat_Engine {
             'status'          => 'sent'
         );
 
-        $message_id = $this->db->insert_message( $data );
+        $message_id = $this->transactions->insert_message( $data );
         if ( $message_id ) {
             do_action( 'tawasol_message_sent', $message_id, $conversation_id, $sender_id );
         }
@@ -66,20 +68,31 @@ class Tawasol_Chat_Engine {
     }
 
     public function start_conversation( $title, $type, $creator_id, $participants = array() ) {
-        $conv_id = $this->db->create_conversation( $title, $type );
+        // Feature: Single Chat Thread Enforcement
+        if ( $type === 'one-on-one' && count($participants) === 1 ) {
+            $other_user = $participants[0];
+            $existing = $this->queries->find_existing_one_on_one( $creator_id, $other_user );
+            if ( $existing ) return $existing;
+        }
+
+        $conv_id = $this->transactions->create_conversation( $title, $type );
         if ( $conv_id ) {
-            $this->db->add_participant( $conv_id, $creator_id, 1 );
+            $this->transactions->add_participant( $conv_id, $creator_id, 1 );
             foreach ( $participants as $p_id ) {
                 if ( $p_id != $creator_id ) {
-                    $this->db->add_participant( $conv_id, $p_id, 0 );
+                    $this->transactions->add_participant( $conv_id, $p_id, 0 );
                 }
             }
         }
         return $conv_id;
     }
 
+    public function archive_conversation( $conversation_id, $user_id, $is_archived ) {
+        return $this->transactions->set_archived( $conversation_id, $user_id, $is_archived );
+    }
+
     public function search_messages( $user_id, $term ) {
-        $recent_messages = $this->db->get_recent_messages_for_user( $user_id );
+        $recent_messages = $this->queries->get_recent_messages_for_user( $user_id );
         $results = array();
         $term = strtolower( $term );
 

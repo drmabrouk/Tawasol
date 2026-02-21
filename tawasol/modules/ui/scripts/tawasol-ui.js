@@ -137,11 +137,19 @@
                             <div class="tawasol-chat-header">
                                 <div class="tawasol-current-chat-info">${i18n.selectConv}</div>
                                 <div class="tawasol-header-actions">
+                                    <button id="tawasol-archive-btn" style="display:none;" title="Archive Chat">📦</button>
+                                    <button id="tawasol-media-panel-btn" style="display:none;" title="View Media">🖼️</button>
                                     <button id="tawasol-view-profile" style="display:none;">👤</button>
                                 </div>
                             </div>
-                            <div class="tawasol-messages-list">
-                                <!-- Messages will be loaded here -->
+                                <div style="flex:1; display:flex; overflow:hidden;">
+                                    <div class="tawasol-messages-list">
+                                        <!-- Messages will be loaded here -->
+                                    </div>
+                                    <div id="tawasol-media-panel" style="display:none; width:250px; background:var(--tawasol-sidebar-bg); border-inline-start:1px solid var(--tawasol-border); overflow-y:auto; padding:15px;">
+                                        <h4>Shared Media</h4>
+                                        <div id="tawasol-media-items"></div>
+                                    </div>
                             </div>
                             <div class="tawasol-message-input-area">
                                 <form id="tawasol-send-message-form">
@@ -285,6 +293,19 @@
                 const name = $('.tawasol-current-chat-info').text();
                 if (confirm('Do you want to block ' + name + '?')) {
                     self.blockCurrentChatUser();
+                }
+            });
+
+            $(document).on('click', '#tawasol-archive-btn', () => {
+                if (self.currentConversation) {
+                    self.toggleArchive(self.currentConversation);
+                }
+            });
+
+            $(document).on('click', '#tawasol-media-panel-btn', () => {
+                $('#tawasol-media-panel').toggle();
+                if ($('#tawasol-media-panel').is(':visible')) {
+                    self.loadChatMedia();
                 }
             });
 
@@ -622,6 +643,7 @@
                     const list = $('.tawasol-conversations-list');
                     list.empty();
                     conversations.forEach(conv => {
+                        if (conv.is_archived == 1) return; // Hide archived
                         const title = conv.title || 'Chat #' + conv.id;
                         const unreadCount = self.unreadCounts[conv.id] || 0;
                         list.append(`
@@ -655,6 +677,9 @@
             const title = $(`.tawasol-conversation-item[data-id="${id}"] .tawasol-conv-title`).text();
             $('.tawasol-current-chat-info').text(title);
             $('#tawasol-view-profile').show();
+            $('#tawasol-archive-btn').show();
+            $('#tawasol-media-panel-btn').show();
+            $('#tawasol-media-panel').hide();
 
             this.loadMessages(id);
 
@@ -693,11 +718,24 @@
                 success: function(res) {
                     const info = $('.tawasol-current-chat-info');
                     const baseTitle = $(`.tawasol-conversation-item[data-id="${self.currentConversation}"] .tawasol-conv-title`).text();
+                    const indicator = $(`.tawasol-conversation-item[data-id="${self.currentConversation}"] .tawasol-presence-indicator`);
+
+                    let statusClass = 'offline';
+                    if (res.status === 'online') {
+                        statusClass = 'online';
+                    } else if (res.last_seen) {
+                        const lastSeen = new Date(res.last_seen);
+                        const now = new Date();
+                        if (now - lastSeen < 300000) { // 5 minutes
+                            statusClass = 'recent';
+                        }
+                    }
+                    indicator.attr('class', 'tawasol-presence-indicator ' + statusClass);
 
                     if (res.is_typing && res.conv_id == self.currentConversation) {
                         info.text(baseTitle + ' (typing...)');
                     } else {
-                        info.text(baseTitle + (res.status === 'online' ? ' (Online)' : ''));
+                        info.text(baseTitle);
                     }
                 }
             });
@@ -905,6 +943,7 @@
             if (isCurrentConv) {
                 this.renderMessage(msg, list);
                 list.scrollTop(list[0].scrollHeight);
+                if (!isMe) this.markAsRead(msg.id); // Immediate read if open
             } else {
                 this.renderMessage(msg, $('<div>')); // Just to process unread/lastId
                 this.updateUnreadBadges();
@@ -939,7 +978,7 @@
                 let badge = $(this).find('.tawasol-unread-badge');
                 if (count > 0) {
                     if (badge.length === 0) {
-                        $(this).append(`<div class="tawasol-unread-badge">${count}</div>`);
+                        $(this).find('.tawasol-conv-info').after(`<div class="tawasol-unread-badge">${count}</div>`);
                     } else {
                         badge.text(count);
                     }
@@ -1090,6 +1129,56 @@
                 success: (res) => {
                     self.loadConversations();
                     self.selectConversation(res.conversation_id);
+                }
+            });
+        },
+
+        loadChatMedia: function() {
+            const self = this;
+            const container = $('#tawasol-media-items');
+            container.empty();
+
+            const media = { images: [], files: [] };
+            $('.tawasol-message').each(function() {
+                const img = $(this).find('img');
+                const link = $(this).find('a');
+                if (img.length > 0) {
+                    media.images.push(img.attr('src'));
+                } else if (link.length > 0) {
+                    media.files.push(link[0].outerHTML);
+                }
+            });
+
+            if (media.images.length > 0) {
+                container.append('<h5 style="margin-top:15px;">Images</h5><div class="tawasol-media-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;"></div>');
+                media.images.forEach(src => {
+                    container.find('.tawasol-media-grid').append(`<img src="${src}" style="width:100%; height:80px; object-fit:cover; border-radius:5px; cursor:pointer;" onclick="window.open('${src}')">`);
+                });
+            }
+
+            if (media.files.length > 0) {
+                container.append('<h5 style="margin-top:15px;">Files</h5>');
+                media.files.forEach(html => {
+                    container.append(`<div style="padding:8px; background:var(--tawasol-bg); border:1px solid var(--tawasol-border); border-radius:5px; margin-bottom:10px; font-size:0.75rem; overflow:hidden; text-overflow:ellipsis;">${html}</div>`);
+                });
+            }
+
+            if (container.is(':empty')) {
+                container.append('<p style="font-size:0.8rem; opacity:0.6;">No media shared in this chat.</p>');
+            }
+        },
+
+        toggleArchive: function(id) {
+            const self = this;
+            $.ajax({
+                url: tawasolVars.restUrl + `/conversations/${id}/archive`,
+                method: 'POST',
+                beforeSend: (xhr) => xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce),
+                data: { archive: true },
+                success: () => {
+                    self.loadConversations();
+                    $('#tawasol-chat-main').hide();
+                    alert('Conversation archived.');
                 }
             });
         },
