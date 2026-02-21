@@ -17,20 +17,8 @@ class Tawasol_Auth {
      * @return WP_User|WP_Error
      */
     public static function authenticate( $identifier, $pin ) {
-        // Find user by email or phone (phone stored in meta)
-        $user = get_user_by( 'email', $identifier );
-
-        if ( ! $user ) {
-            // Try by phone number
-            $users = get_users( array(
-                'meta_key'   => 'tawasol_phone',
-                'meta_value' => $identifier,
-                'number'     => 1,
-            ) );
-            if ( ! empty( $users ) ) {
-                $user = $users[0];
-            }
-        }
+        // Find user strictly by username
+        $user = get_user_by( 'login', $identifier );
 
         if ( ! $user ) {
             return new WP_Error( 'invalid_user', __( 'User not found.', 'tawasol' ) );

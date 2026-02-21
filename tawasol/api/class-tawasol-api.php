@@ -189,6 +189,18 @@ class Tawasol_API {
 			'callback'            => array( $this, 'pin_message' ),
 			'permission_callback' => array( $this, 'check_auth' ),
 		) );
+
+        register_rest_route( $this->namespace, '/auth/request-otp', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'request_otp' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
+
+        register_rest_route( $this->namespace, '/auth/verify-otp', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'verify_otp' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
 	}
 
 	/**
@@ -251,17 +263,8 @@ class Tawasol_API {
     public function check_user( $request ) {
         $identifier = $request->get_param( 'identifier' );
 
-        $user = get_user_by( 'email', $identifier );
-        if ( ! $user ) {
-            $users = get_users( array(
-                'meta_key'   => 'tawasol_phone',
-                'meta_value' => $identifier,
-                'number'     => 1,
-            ) );
-            if ( ! empty( $users ) ) {
-                $user = $users[0];
-            }
-        }
+        // Strictly by username
+        $user = get_user_by( 'login', $identifier );
 
         if ( $user ) {
             return new WP_REST_Response( array(
@@ -275,7 +278,7 @@ class Tawasol_API {
 
 	public function login( $request ) {
         $params = $request->get_params();
-        $identifier = $params['identifier'] ?? ''; // Phone or email
+        $identifier = $params['identifier'] ?? ''; // Strictly Username
         $pin = $params['pin'] ?? '';
 
         if ( empty( $identifier ) || empty( $pin ) ) {
@@ -285,6 +288,16 @@ class Tawasol_API {
         // Brute force protection
         $key = 'tawasol_login_attempts_' . md5( $identifier );
         $attempts = get_transient( $key ) ?: 0;
+
+        // Persistent lockout check if user exists
+        $user_obj = get_user_by( 'login', $identifier );
+        if ( $user_obj ) {
+            $lockout = get_user_meta( $user_obj->ID, 'tawasol_lockout_until', true );
+            if ( $lockout && $lockout > time() ) {
+                return new WP_Error( 'account_locked', __( 'Account locked due to multiple failed attempts. Please try again later.', 'tawasol' ), array( 'status' => 429 ) );
+            }
+        }
+
         if ( $attempts >= 5 ) {
             $this->log_event( 'brute_force_alert', "Blocked login attempt for $identifier (too many attempts)" );
             return new WP_Error( 'too_many_attempts', __( 'Too many failed attempts. Please try again later.', 'tawasol' ), array( 'status' => 429 ) );
@@ -294,10 +307,25 @@ class Tawasol_API {
 
         if ( is_wp_error( $user ) ) {
             set_transient( $key, $attempts + 1, 900 ); // 15 minutes block
+
+            if ( $user_obj ) {
+                $failed_attempts = (int) get_user_meta( $user_obj->ID, 'tawasol_failed_logins', true ) + 1;
+                update_user_meta( $user_obj->ID, 'tawasol_failed_logins', $failed_attempts );
+                if ( $failed_attempts >= 10 ) {
+                    update_user_meta( $user_obj->ID, 'tawasol_lockout_until', time() + 3600 ); // 1 hour lockout
+                    update_user_meta( $user_obj->ID, 'tawasol_failed_logins', 0 );
+                }
+            }
+
             $this->log_event( 'login_failed', "Failed login for $identifier" );
-            return new WP_Error( 'auth_failed', $user->get_error_message(), array( 'status' => 401 ) );
+            // Generic error message
+            return new WP_Error( 'auth_failed', __( 'Invalid username or PIN.', 'tawasol' ), array( 'status' => 401 ) );
         }
 
+        if ( $user_obj ) {
+            delete_user_meta( $user_obj->ID, 'tawasol_failed_logins' );
+            delete_user_meta( $user_obj->ID, 'tawasol_lockout_until' );
+        }
         delete_transient( $key );
         Tawasol_Auth::login_user( $user );
         $this->log_event( 'login_success', "Successful login for $identifier", $user->ID );
@@ -518,6 +546,31 @@ class Tawasol_API {
             $conversation_id, $after
         ) );
 
+        // Update status to 'delivered' for messages received by others
+        if ( ! empty( $messages ) ) {
+            $msg_ids = array();
+            foreach ( $messages as $message ) {
+                if ( $message->sender_id != $user_id && $message->status === 'sent' ) {
+                    $msg_ids[] = $message->id;
+                }
+            }
+
+            if ( ! empty( $msg_ids ) ) {
+                $ids_placeholder = implode( ',', array_fill( 0, count( $msg_ids ), '%d' ) );
+                $wpdb->query( $wpdb->prepare(
+                    "UPDATE $table_messages SET status = 'delivered' WHERE id IN ($ids_placeholder)",
+                    ...$msg_ids
+                ) );
+
+                // Update the local objects too
+                foreach ( $messages as &$message ) {
+                    if ( in_array( $message->id, $msg_ids ) ) {
+                        $message->status = 'delivered';
+                    }
+                }
+            }
+        }
+
         foreach ( $messages as &$message ) {
             if ( $message->content_type === 'text' ) {
                 $message->content = Tawasol_Encryption::decrypt( $message->content );
@@ -567,14 +620,24 @@ class Tawasol_API {
         }
 
         $table_messages = $wpdb->prefix . 'tawasol_messages';
-        $wpdb->insert( $table_messages, array(
+
+        $wpdb->query( 'START TRANSACTION' );
+
+        $inserted = $wpdb->insert( $table_messages, array(
             'conversation_id' => $params['conversation_id'],
             'sender_id'       => $user_id,
             'content'         => $content,
             'content_type'    => $content_type,
             'status'          => 'sent'
         ) );
+
+        if ( false === $inserted ) {
+            $wpdb->query( 'ROLLBACK' );
+            return new WP_Error( 'db_error', __( 'Failed to save message.', 'tawasol' ), array( 'status' => 500 ) );
+        }
+
         $message_id = $wpdb->insert_id;
+        $wpdb->query( 'COMMIT' );
 
         // Trigger push notifications
         do_action( 'tawasol_message_sent', $message_id, $params['conversation_id'], $user_id );
@@ -878,6 +941,13 @@ class Tawasol_API {
      */
     public function change_pin( $request ) {
         $user_id = get_current_user_id();
+
+        // Require OTP verification for PIN change
+        if ( ! get_transient( 'tawasol_otp_verified_' . $user_id ) ) {
+            return new WP_Error( 'otp_required', __( 'OTP verification required.', 'tawasol' ), array( 'status' => 403 ) );
+        }
+        delete_transient( 'tawasol_otp_verified_' . $user_id );
+
         $params = $request->get_params();
         $old_pin = $params['old_pin'] ?? '';
         $new_pin = $params['new_pin'] ?? '';
@@ -935,6 +1005,41 @@ class Tawasol_API {
         $this->log_event( 'account_deactivated', "Deactivated account" );
 
         return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    public function request_otp( $request ) {
+        $user_id = get_current_user_id();
+        $otp = rand( 100000, 999999 );
+
+        // Store OTP in transient for 10 minutes
+        set_transient( 'tawasol_otp_' . $user_id, $otp, 600 );
+
+        // Log event
+        $this->log_event( 'otp_requested', "OTP requested by user ID $user_id" );
+
+        // In a real app, this would send an SMS or Email.
+        // For this demo, we'll return it in the response for simulation.
+        return new WP_REST_Response( array(
+            'success' => true,
+            'message' => __( 'OTP sent (Simulation: ' . $otp . ')', 'tawasol' )
+        ), 200 );
+    }
+
+    public function verify_otp( $request ) {
+        $user_id = get_current_user_id();
+        $params = $request->get_params();
+        $otp = $params['otp'] ?? '';
+
+        $stored_otp = get_transient( 'tawasol_otp_' . $user_id );
+
+        if ( $stored_otp && $otp == $stored_otp ) {
+            delete_transient( 'tawasol_otp_' . $user_id );
+            // Store verification success in transient for a short time to allow subsequent action
+            set_transient( 'tawasol_otp_verified_' . $user_id, true, 300 );
+            return new WP_REST_Response( array( 'success' => true ), 200 );
+        }
+
+        return new WP_Error( 'invalid_otp', __( 'Invalid or expired OTP.', 'tawasol' ), array( 'status' => 401 ) );
     }
 
     public function upload_file( $request ) {

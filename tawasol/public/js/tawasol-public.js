@@ -439,6 +439,7 @@
             const self = this;
             const identifier = $('#tawasol-identifier').val();
             const pin = $('#tawasol-pin').val();
+            const i18n = tawasolVars.i18n;
 
             if (!/^\d{6}$/.test(pin)) {
                 alert('PIN must be exactly 6 digits.');
@@ -454,6 +455,10 @@
                         tawasolVars.userId = res.user.id;
                         self.initAfterAuth();
                     }
+                },
+                error: (xhr) => {
+                    const res = xhr.responseJSON;
+                    alert(res && res.message ? res.message : i18n.authFailed);
                 }
             });
         },
@@ -678,7 +683,7 @@
             });
         },
 
-        sendMessage: function() {
+        sendMessage: function(retryCount = 0) {
             const self = this;
             const input = $('#tawasol-message-input');
             const content = input.val();
@@ -698,6 +703,14 @@
                 success: function() {
                     input.val('');
                     self.loadMessages(self.currentConversation);
+                },
+                error: function() {
+                    if (retryCount < 3) {
+                        const delay = Math.pow(2, retryCount) * 1000;
+                        setTimeout(() => self.sendMessage(retryCount + 1), delay);
+                    } else {
+                        alert('Failed to send message after multiple attempts.');
+                    }
                 }
             });
         },
@@ -937,6 +950,11 @@
         },
 
         renderSecuritySettings: function(profile) {
+            const self = this;
+            setTimeout(() => {
+                $('#tawasol-change-pin-btn').off('click').on('click', () => self.handleChangePinFlow());
+            }, 10);
+
             return `
                 <div class="tawasol-settings-group">
                     <h4>Security</h4>
@@ -950,6 +968,54 @@
                     </div>
                 </div>
             `;
+        },
+
+        handleChangePinFlow: function() {
+            const self = this;
+            const i18n = tawasolVars.i18n;
+
+            if (confirm(i18n.otpSent)) {
+                $.ajax({
+                    url: tawasolVars.restUrl + '/auth/request-otp',
+                    method: 'POST',
+                    beforeSend: (xhr) => xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce),
+                    success: (res) => {
+                        const otp = prompt(res.message + '\nEnter OTP:');
+                        if (otp) {
+                            self.verifyOtpAndChangePin(otp);
+                        }
+                    }
+                });
+            }
+        },
+
+        verifyOtpAndChangePin: function(otp) {
+            const self = this;
+            $.ajax({
+                url: tawasolVars.restUrl + '/auth/verify-otp',
+                method: 'POST',
+                data: { otp: otp },
+                beforeSend: (xhr) => xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce),
+                success: () => {
+                    const oldPin = prompt('Enter old PIN:');
+                    const newPin = prompt('Enter new 6-digit PIN:');
+                    if (oldPin && newPin) {
+                        self.updatePin(oldPin, newPin);
+                    }
+                },
+                error: (xhr) => alert(xhr.responseJSON.message)
+            });
+        },
+
+        updatePin: function(oldPin, newPin) {
+            $.ajax({
+                url: tawasolVars.restUrl + '/security/pin',
+                method: 'POST',
+                data: { old_pin: oldPin, new_pin: newPin },
+                beforeSend: (xhr) => xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce),
+                success: () => alert('PIN changed successfully!'),
+                error: (xhr) => alert(xhr.responseJSON.message)
+            });
         },
 
         renderNotificationSettings: function(profile) {

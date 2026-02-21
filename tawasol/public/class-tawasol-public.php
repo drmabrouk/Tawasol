@@ -45,6 +45,10 @@ class Tawasol_Public {
                 'selectConv'      => __( 'Select a conversation', 'tawasol' ),
                 'welcomeBack'     => __( 'Welcome back, %s', 'tawasol' ),
                 'usernameTaken'   => __( 'Taken. Suggestions: %s', 'tawasol' ),
+                'authFailed'      => __( 'Invalid username or PIN.', 'tawasol' ),
+                'otpRequired'     => __( 'OTP verification required.', 'tawasol' ),
+                'otpSent'         => __( 'OTP sent to your registered device.', 'tawasol' ),
+                'retry'           => __( 'Retrying...', 'tawasol' ),
             ),
             'iconUrl' => plugins_url( 'assets/icon.png', dirname( __FILE__ ) ),
         ) );
