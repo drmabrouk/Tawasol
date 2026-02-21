@@ -65,4 +65,19 @@ class Tawasol_Public {
         return $template;
     }
 
+    /**
+     * Handle redirections between login and chat pages
+     */
+    public function handle_redirects() {
+        if ( is_page( 'tawasol-login' ) && is_user_logged_in() ) {
+            wp_redirect( get_permalink( get_page_by_path( 'tawasol-chat' ) ) );
+            exit;
+        }
+
+        if ( is_page( 'tawasol-chat' ) && ! is_user_logged_in() ) {
+            wp_redirect( get_permalink( get_page_by_path( 'tawasol-login' ) ) );
+            exit;
+        }
+    }
+
 }

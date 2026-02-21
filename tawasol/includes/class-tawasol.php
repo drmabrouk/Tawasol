@@ -79,6 +79,7 @@ class Tawasol {
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
 		$this->loader->add_filter( 'template_include', $plugin_public, 'override_template' );
+		$this->loader->add_action( 'template_redirect', $plugin_public, 'handle_redirects' );
 	}
 
 	private function define_api_hooks() {

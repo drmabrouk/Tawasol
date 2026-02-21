@@ -35,27 +35,31 @@
 
         renderLogin: function() {
             const i18n = tawasolVars.i18n;
+            const savedIdentifier = localStorage.getItem('tawasol_last_id') || '';
+
             const html = `
                 <div id="tawasol-auth-container">
                     <div class="tawasol-auth-box">
                         <h2>${i18n.welcome}</h2>
                         <div id="tawasol-auth-step-1">
-                            <input type="text" id="tawasol-identifier" placeholder="${i18n.email} ${i18n.phone}">
+                            <input type="text" id="tawasol-identifier" placeholder="${i18n.email} ${i18n.phone}" value="${savedIdentifier}">
                             <button id="tawasol-check-user">${i18n.continue}</button>
                         </div>
                         <div id="tawasol-auth-step-2" style="display:none;">
                             <p id="tawasol-welcome-back"></p>
                             <input type="password" id="tawasol-pin" placeholder="${i18n.pin}" maxlength="6">
                             <button id="tawasol-login-btn">${i18n.login}</button>
+                            <button class="tawasol-back-btn" style="margin-top:10px; background:none; color:var(--tawasol-text); border:1px solid var(--tawasol-border);">Back</button>
                         </div>
                         <div id="tawasol-auth-register" style="display:none;">
                             <h3>${i18n.register}</h3>
-                            <input type="email" id="tawasol-reg-email" placeholder="${i18n.email}">
-                            <input type="text" id="tawasol-reg-phone" placeholder="${i18n.phone}">
+                            <input type="email" id="tawasol-reg-email" placeholder="${i18n.email}" value="${savedIdentifier.includes('@') ? savedIdentifier : ''}">
+                            <input type="text" id="tawasol-reg-phone" placeholder="${i18n.phone}" value="${!savedIdentifier.includes('@') ? savedIdentifier : ''}">
                             <input type="text" id="tawasol-reg-username" placeholder="${i18n.username}">
                             <div id="tawasol-username-suggestions"></div>
                             <input type="password" id="tawasol-reg-pin" placeholder="${i18n.pin}" maxlength="6">
                             <button id="tawasol-register-btn">${i18n.register}</button>
+                            <button class="tawasol-back-btn" style="margin-top:10px; background:none; color:var(--tawasol-text); border:1px solid var(--tawasol-border);">Back</button>
                         </div>
                     </div>
                 </div>
@@ -134,7 +138,8 @@
             });
 
             $(document).on('click', '#tawasol-logout', () => {
-                window.location.href = tawasolVars.homeUrl + '/wp-login.php?action=logout';
+                const loginUrl = tawasolVars.homeUrl + '/tawasol-login';
+                window.location.href = tawasolVars.homeUrl + '/wp-login.php?action=logout&redirect_to=' + encodeURIComponent(loginUrl);
             });
 
             $(document).on('click', '#tawasol-close-chat', () => {
@@ -165,7 +170,17 @@
             $(document).on('click', '#tawasol-login-btn', () => self.handleLogin());
             $(document).on('click', '#tawasol-register-btn', () => self.handleRegister());
 
+            $(document).on('click', '.tawasol-back-btn', () => {
+                $('#tawasol-auth-step-2, #tawasol-auth-register').hide();
+                $('#tawasol-auth-step-1').fadeIn();
+            });
+
             $(document).on('input', '#tawasol-reg-username', () => self.handleUsernameCheck());
+
+            $(document).on('input', '#tawasol-pin, #tawasol-reg-pin', function() {
+                const val = $(this).val();
+                $(this).val(val.replace(/\D/g, '').substring(0, 6));
+            });
 
             $(document).on('input', '#tawasol-sidebar-search', function() {
                 const term = $(this).val();
@@ -353,6 +368,10 @@
         handleCheckUser: function() {
             const identifier = $('#tawasol-identifier').val();
             const i18n = tawasolVars.i18n;
+            if (!identifier) return;
+
+            localStorage.setItem('tawasol_last_id', identifier);
+
             $.ajax({
                 url: tawasolVars.restUrl + '/auth/check-user',
                 method: 'POST',
@@ -360,11 +379,11 @@
                 success: (res) => {
                     if (res.exists) {
                         $('#tawasol-auth-step-1').hide();
-                        $('#tawasol-auth-step-2').show();
+                        $('#tawasol-auth-step-2').fadeIn();
                         $('#tawasol-welcome-back').text(i18n.welcomeBack.replace('%s', res.name));
                     } else {
                         $('#tawasol-auth-step-1').hide();
-                        $('#tawasol-auth-register').show();
+                        $('#tawasol-auth-register').fadeIn();
                     }
                 }
             });
@@ -374,6 +393,12 @@
             const self = this;
             const identifier = $('#tawasol-identifier').val();
             const pin = $('#tawasol-pin').val();
+
+            if (!/^\d{6}$/.test(pin)) {
+                alert('PIN must be exactly 6 digits.');
+                return;
+            }
+
             $.ajax({
                 url: tawasolVars.restUrl + '/auth/login',
                 method: 'POST',
@@ -413,6 +438,17 @@
                 username: $('#tawasol-reg-username').val(),
                 pin: $('#tawasol-reg-pin').val()
             };
+
+            if (!data.email.includes('@')) {
+                alert('Please enter a valid email.');
+                return;
+            }
+
+            if (!/^\d{6}$/.test(data.pin)) {
+                alert('PIN must be exactly 6 digits.');
+                return;
+            }
+
             $.ajax({
                 url: tawasolVars.restUrl + '/auth/register',
                 method: 'POST',
