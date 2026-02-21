@@ -93,11 +93,11 @@
                         $user = $log->user_id ? get_userdata( $log->user_id ) : null;
                         $username = $user ? $user->user_login : 'Guest';
                         echo "<tr>
-                            <td>{$log->created_at}</td>
-                            <td>{$log->event_type}</td>
-                            <td>{$username}</td>
-                            <td>{$log->ip_address}</td>
-                            <td>{$log->description}</td>
+                            <td>" . esc_html( $log->created_at ) . "</td>
+                            <td>" . esc_html( $log->event_type ) . "</td>
+                            <td>" . esc_html( $username ) . "</td>
+                            <td>" . esc_html( $log->ip_address ) . "</td>
+                            <td>" . esc_html( $log->description ) . "</td>
                         </tr>";
                     }
                     ?>

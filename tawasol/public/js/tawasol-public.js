@@ -6,6 +6,13 @@
      * Handles the full-screen UI, real-time messaging, and authentication flow.
      */
     const TawasolApp = {
+        /**
+         * Escape HTML to prevent XSS
+         */
+        escapeHTML: function(str) {
+            return $('<div>').text(str).html();
+        },
+
         currentConversation: null, // ID of the currently selected conversation
         pollingInterval: null,      // Interval for fetching new messages
         presenceInterval: null,     // Interval for updating user status
@@ -57,19 +64,22 @@
 
         renderOverlay: function() {
             const i18n = tawasolVars.i18n;
-            const launcherHtml = `
+            const isDedicated = $('#tawasol-login-page-trigger').length || $('#tawasol-chat-page-trigger').length;
+
+            const launcherHtml = isDedicated ? '' : `
                 <div id="tawasol-launcher" title="${i18n.welcome}">
                     <span class="tawasol-launcher-icon">💬</span>
                 </div>
             `;
             const html = `
-                <div id="tawasol-chat-overlay">
+                <div id="tawasol-chat-overlay" class="${isDedicated ? 'dedicated' : ''}">
                     <div class="tawasol-top-bar">
                         <button id="tawasol-mobile-menu" class="tawasol-mobile-only">☰</button>
                         <div class="tawasol-brand">Tawasol</div>
                         <div class="tawasol-top-actions">
                             <button id="tawasol-theme-toggle">🌓</button>
-                            <button id="tawasol-close-chat">✖</button>
+                            ${isDedicated && tawasolVars.userId != 0 ? '<button id="tawasol-logout" title="Logout">🚪</button>' : ''}
+                            ${isDedicated ? '' : '<button id="tawasol-close-chat">✖</button>'}
                         </div>
                     </div>
                     <div class="tawasol-main-container">
@@ -116,6 +126,10 @@
 
             $(document).on('click', '#tawasol-launcher', () => {
                 self.openChat();
+            });
+
+            $(document).on('click', '#tawasol-logout', () => {
+                window.location.href = tawasolVars.homeUrl + '/wp-login.php?action=logout';
             });
 
             $(document).on('click', '#tawasol-close-chat', () => {
@@ -245,13 +259,19 @@
         },
 
         handleLogin: function() {
+            const self = this;
             const identifier = $('#tawasol-identifier').val();
             const pin = $('#tawasol-pin').val();
             $.ajax({
                 url: tawasolVars.restUrl + '/auth/login',
                 method: 'POST',
                 data: { identifier: identifier, pin: pin },
-                success: () => location.reload()
+                success: (res) => {
+                    if (res.success) {
+                        tawasolVars.userId = res.user.id;
+                        self.initAfterAuth();
+                    }
+                }
             });
         },
 
@@ -274,6 +294,7 @@
         },
 
         handleRegister: function() {
+            const self = this;
             const data = {
                 email: $('#tawasol-reg-email').val(),
                 phone: $('#tawasol-reg-phone').val(),
@@ -284,8 +305,20 @@
                 url: tawasolVars.restUrl + '/auth/register',
                 method: 'POST',
                 data: data,
-                success: () => location.reload()
+                success: (res) => {
+                    if (res.success) {
+                        tawasolVars.userId = res.user.id;
+                        self.initAfterAuth();
+                    }
+                }
             });
+        },
+
+        initAfterAuth: function() {
+            $('#tawasol-chat-overlay').remove();
+            $('#tawasol-launcher').remove();
+            this.init();
+            this.openChat();
         },
 
         detectLanguage: function() {
@@ -337,11 +370,12 @@
                     const list = $('.tawasol-conversations-list');
                     list.empty();
                     conversations.forEach(conv => {
+                        const title = conv.title || 'Chat #' + conv.id;
                         list.append(`
                             <div class="tawasol-conversation-item" data-id="${conv.id}">
                                 <div class="tawasol-conv-avatar">👥</div>
                                 <div class="tawasol-conv-info">
-                                    <div class="tawasol-conv-title">${conv.title || 'Chat #' + conv.id}</div>
+                                    <div class="tawasol-conv-title">${self.escapeHTML(title)}</div>
                                     <div class="tawasol-conv-last-msg">...</div>
                                 </div>
                                 <div class="tawasol-presence-indicator" data-user-id="${conv.id}"></div>
@@ -411,9 +445,9 @@
 
                         list.append(`
                             <div class="tawasol-message ${isMe ? 'me' : 'them'}" data-id="${msg.id}">
-                                <div class="tawasol-msg-content">${msg.content}</div>
+                                <div class="tawasol-msg-content">${self.escapeHTML(msg.content)}</div>
                                 <div class="tawasol-msg-meta">
-                                    ${msg.created_at}
+                                    ${self.escapeHTML(msg.created_at)}
                                     ${isMe ? `<span class="tawasol-msg-status">${statusIcon}</span>` : ''}
                                 </div>
                             </div>
@@ -477,7 +511,6 @@
         // Auto-open on dedicated pages
         if ($('#tawasol-login-page-trigger').length || $('#tawasol-chat-page-trigger').length) {
             TawasolApp.openChat();
-            $('#tawasol-launcher').hide(); // Hide launcher on dedicated pages to avoid redundancy
         }
     });
 

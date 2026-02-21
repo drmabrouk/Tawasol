@@ -49,4 +49,20 @@ class Tawasol_Public {
         ) );
 	}
 
+    /**
+     * Override page template for Tawasol pages
+     *
+     * @param string $template
+     * @return string
+     */
+    public function override_template( $template ) {
+        if ( is_page( 'tawasol-login' ) || is_page( 'tawasol-chat' ) ) {
+            $new_template = plugin_dir_path( __FILE__ ) . 'partials/tawasol-full-screen-template.php';
+            if ( file_exists( $new_template ) ) {
+                return $new_template;
+            }
+        }
+        return $template;
+    }
+
 }
