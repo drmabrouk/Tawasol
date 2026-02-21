@@ -571,6 +571,7 @@ class Tawasol_API_V1 {
 	 */
     public function send_message( $request ) {
         $user_id = get_current_user_id();
+        $this->clear_tawasol_cache( $user_id, $request->get_param('conversation_id') );
         $params = $request->get_params();
         $conversation_id = $params['conversation_id'];
         $content = $params['content'];
@@ -608,6 +609,7 @@ class Tawasol_API_V1 {
         global $wpdb;
         $message_id = $request['id'];
         $user_id = get_current_user_id();
+        $this->clear_tawasol_cache( $user_id );
         $table_messages = $wpdb->prefix . 'tawasol_messages';
         $table_participants = $wpdb->prefix . 'tawasol_participants';
 
@@ -762,13 +764,16 @@ class Tawasol_API_V1 {
         }
 
         $last_seen = get_user_meta( $user_id, 'tawasol_last_seen', true );
+        $user_obj = get_userdata( $user_id );
 
         return new WP_REST_Response( array(
-            'user_id'   => $user_id,
-            'status'    => $data['status'] ?? 'offline',
-            'is_typing' => $data['is_typing'] ?? false,
-            'conv_id'   => $data['conv_id'] ?? null,
-            'last_seen' => $last_seen,
+            'user_id'      => $user_id,
+            'display_name' => $user_obj ? $user_obj->display_name : '',
+            'photo'        => get_user_meta( $user_id, 'tawasol_photo', true ),
+            'status'       => $data['status'] ?? 'offline',
+            'is_typing'    => $data['is_typing'] ?? false,
+            'conv_id'      => $data['conv_id'] ?? null,
+            'last_seen'    => $last_seen,
         ), 200 );
     }
 
@@ -900,6 +905,18 @@ class Tawasol_API_V1 {
     }
 
     /**
+     * Helper to clear Tawasol related cache/transients for a user/conversation
+     */
+    private function clear_tawasol_cache( $user_id = null, $conversation_id = null ) {
+        if ( $user_id ) {
+            wp_cache_delete( 'tawasol_presence_' . $user_id, 'tawasol' );
+            delete_transient( 'tawasol_presence_' . $user_id );
+        }
+        // Invalidate any custom query caches if implemented in future
+        do_action( 'tawasol_cache_cleared', $user_id, $conversation_id );
+    }
+
+    /**
      * Update current user profile.
      */
     public function update_profile( $request ) {
@@ -916,6 +933,9 @@ class Tawasol_API_V1 {
                 update_user_meta( $user_id, $field, $params[ str_replace('tawasol_', '', $field) ] );
             }
         }
+
+        update_user_meta( $user_id, 'tawasol_profile_updated_at', current_time( 'mysql' ) );
+        $this->clear_tawasol_cache( $user_id );
 
         return $this->get_profile( $request );
     }
@@ -1183,9 +1203,9 @@ class Tawasol_API_V1 {
                 }
             }
 
-            // Status updates - using msg_status_update index
+            // Status and Deletion updates
             $status_updates = $wpdb->get_results( $wpdb->prepare(
-                "SELECT id, conversation_id, status FROM $table_messages
+                "SELECT id, conversation_id, status, content FROM $table_messages
                  WHERE sender_id = %d AND updated_at > %s",
                 $user_id, $last_status_check
             ) );
@@ -1193,10 +1213,42 @@ class Tawasol_API_V1 {
             if ( ! empty( $status_updates ) ) {
                 $has_activity = true;
                 foreach ( $status_updates as $update ) {
-                    echo "event: status_update\n";
-                    echo "data: " . json_encode( $update ) . "\n\n";
+                    if ( $update->content === '[Message Deleted]' ) {
+                        echo "event: message_deleted\n";
+                        echo "data: " . json_encode( array( 'id' => $update->id, 'conversation_id' => $update->conversation_id ) ) . "\n\n";
+                    } else {
+                        echo "event: status_update\n";
+                        echo "data: " . json_encode( $update ) . "\n\n";
+                    }
                 }
             }
+
+            // Profile updates detection for participants in active conversations
+            $participants = $wpdb->get_col( $wpdb->prepare(
+                "SELECT DISTINCT p2.user_id
+                 FROM $table_participants p1
+                 JOIN $table_participants p2 ON p1.conversation_id = p2.conversation_id
+                 WHERE p1.user_id = %d AND p2.user_id != %d",
+                $user_id, $user_id
+            ) );
+
+            if ( ! empty( $participants ) ) {
+                foreach ( $participants as $p_id ) {
+                    $last_upd = get_user_meta( $p_id, 'tawasol_profile_updated_at', true );
+                    if ( $last_upd && $last_upd > $last_status_check ) {
+                        $has_activity = true;
+                        $user_data = get_userdata( $p_id );
+                        echo "event: profile_updated\n";
+                        echo "data: " . json_encode( array(
+                            'id'           => $p_id,
+                            'display_name' => $user_data->display_name,
+                            'photo'        => get_user_meta( $p_id, 'tawasol_photo', true ),
+                            'status_msg'   => get_user_meta( $p_id, 'tawasol_status_msg', true ),
+                        ) ) . "\n\n";
+                    }
+                }
+            }
+
             $last_status_check = current_time( 'mysql' );
 
             // Flush buffer immediately for low latency

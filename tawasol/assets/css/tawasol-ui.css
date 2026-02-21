@@ -322,9 +322,19 @@
     display: flex;
     flex-direction: column;
     background-color: var(--tawasol-bg);
-    background-image: radial-gradient(var(--tawasol-border) 1px, transparent 0);
-    background-size: 24px 24px;
-    background-position: -12px -12px;
+    background-image:
+        radial-gradient(var(--tawasol-primary) 0.5px, transparent 0.5px),
+        radial-gradient(var(--tawasol-primary) 0.5px, transparent 0.5px);
+    background-size: 30px 30px;
+    background-position: 0 0, 15px 15px;
+    background-attachment: fixed;
+    opacity: 0.95;
+}
+
+[data-theme='dark'] .tawasol-messages-list {
+    background-image:
+        radial-gradient(rgba(37, 211, 102, 0.1) 0.5px, transparent 0.5px),
+        radial-gradient(rgba(37, 211, 102, 0.1) 0.5px, transparent 0.5px);
 }
 
 [data-theme='dark'] .tawasol-messages-list {
@@ -334,16 +344,21 @@
 .tawasol-message {
     max-width: 75%;
     padding: 10px 14px;
-    border-radius: 16px;
+    border-radius: 18px;
     position: relative;
-    animation: messageFadeIn 0.2s ease-out;
+    animation: messageFadeIn 0.3s cubic-bezier(0.1, 0.9, 0.2, 1);
     line-height: 1.5;
     font-size: 0.95rem;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    margin-bottom: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    margin-bottom: 12px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.tawasol-message:hover {
+    transform: translateY(-2px);
 }
 
 @keyframes messageFadeIn {
@@ -355,14 +370,14 @@
     align-self: flex-end;
     background: var(--tawasol-bubble-me);
     color: var(--tawasol-text);
-    border-bottom-right-radius: 4px;
+    border-bottom-right-radius: 2px;
 }
 
 .tawasol-message.them {
     align-self: flex-start;
     background: var(--tawasol-bubble-them);
     color: var(--tawasol-text);
-    border-bottom-left-radius: 4px;
+    border-bottom-left-radius: 2px;
     border: 1px solid var(--tawasol-border);
 }
 
@@ -421,11 +436,15 @@
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #9ca3af;
+    background: #ef4444; /* red = offline */
 }
 
 .tawasol-presence-indicator.online {
-    background: #22c55e;
+    background: #22c55e; /* green = online */
+}
+
+.tawasol-presence-indicator.recent {
+    background: #f97316; /* orange = recently offline */
 }
 
 .tawasol-presence-indicator.typing {
@@ -530,10 +549,13 @@
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
+    outline: none !important;
+    box-shadow: none !important;
 }
 
 .tawasol-message-input-area button:hover {
     transform: scale(1.1);
+    color: var(--tawasol-primary);
 }
 
 #tawasol-send-btn svg {
@@ -553,6 +575,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    outline: none !important;
+    box-shadow: none !important;
+    transition: color 0.2s;
+}
+
+.tawasol-top-actions button:hover {
+    color: var(--tawasol-primary);
 }
 
 .tawasol-header-actions button {
@@ -590,8 +619,45 @@
 }
 
 .tawasol-message img {
-    border-radius: 8px;
+    border-radius: 12px;
     margin-bottom: 4px;
+    max-width: 100%;
+    height: auto;
+    display: block;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.tawasol-message img:hover {
+    opacity: 0.9;
+}
+
+.tawasol-media-actions {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    gap: 5px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    background: rgba(0,0,0,0.5);
+    padding: 4px;
+    border-radius: 8px;
+}
+
+.tawasol-message:hover .tawasol-media-actions {
+    opacity: 1;
+}
+
+.tawasol-media-actions button {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 @keyframes fadeIn {

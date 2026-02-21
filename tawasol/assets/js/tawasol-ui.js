@@ -94,7 +94,9 @@
                 archive: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.47 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM6.24 5h11.52l.83 1H5.41l.83-1zM5 19V8h14v11H5zm11-5.5l-4 4-4-4 1.41-1.41L11 13.67V10h2v3.67l1.59-1.59L16 13.5z"/></svg>',
                 media: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>',
                 menu: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>',
-                check: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>'
+                check: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>',
+                send: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>',
+                emoji: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/></svg>'
             };
 
             const launcherHtml = isDedicated ? '' : `
@@ -180,10 +182,9 @@
                                     <input type="file" id="tawasol-file-input" style="display:none;">
                                     <input type="text" id="tawasol-message-input" placeholder="${i18n.typeMessage}">
                                     <div class="tawasol-input-actions">
+                                        <button type="button" id="tawasol-emoji-btn" title="Emoji">${icons.emoji}</button>
                                         <button type="button" id="tawasol-voice-btn" title="Record Voice">${icons.voice}</button>
-                                        <button type="submit" id="tawasol-send-btn" title="${i18n.send}">
-                                            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M1.101 21.757L23.8 12.028 1.101 2.3l.011 7.912 13.623 1.816-13.623 1.817-.011 7.912z"></path></svg>
-                                        </button>
+                                        <button type="submit" id="tawasol-send-btn" title="${i18n.send}">${icons.send}</button>
                                     </div>
                                 </form>
                                 <div id="tawasol-voice-recording-overlay" style="display:none; align-items:center; gap:10px; background:var(--tawasol-bg); padding:0 15px;">
@@ -785,17 +786,20 @@
             const headerInfo = $('.tawasol-current-chat-info');
             headerInfo.html(`
                 <div style="display:flex; align-items:center; gap:12px;">
-                    <div style="width:40px; height:40px; border-radius:50%; background:#eee; display:flex; align-items:center; justify-content:center; overflow:hidden; border:1px solid var(--tawasol-border);">
-                        👤
+                    <div class="tawasol-header-avatar" style="width:40px; height:40px; border-radius:50%; background:var(--tawasol-border); display:flex; align-items:center; justify-content:center; overflow:hidden;">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="#8696a0"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
                     </div>
                     <div>
-                        <div style="font-weight:600; font-size:1rem;">${this.escapeHTML(title)}</div>
+                        <div class="tawasol-header-title" style="font-weight:600; font-size:1rem;">${this.escapeHTML(title)}</div>
                         <div class="tawasol-header-status" style="font-size:0.75rem; opacity:0.7; display:flex; align-items:center; gap:5px;">
                             <span class="tawasol-presence-indicator offline" style="width:8px; height:8px; border:none;"></span> Offline
                         </div>
                     </div>
                 </div>
             `);
+
+            // Fetch actual profile info to populate header properly
+            this.checkActivePresence(id);
 
             $('#tawasol-view-profile').show();
             $('#tawasol-archive-btn').show();
@@ -837,7 +841,6 @@
                 method: 'GET',
                 beforeSend: (xhr) => xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce),
                 success: function(res) {
-                    const baseTitle = $(`.tawasol-conversation-item[data-id="${self.currentConversation}"] .tawasol-conv-title`).text();
                     const indicator = $(`.tawasol-conversation-item[data-id="${self.currentConversation}"] .tawasol-presence-indicator`);
 
                     let statusClass = 'offline';
@@ -857,9 +860,16 @@
 
                     const headerStatus = $('.tawasol-header-status');
                     if (res.is_typing && res.conv_id == self.currentConversation) {
-                        headerStatus.html('<span class="tawasol-presence-indicator typing" style="width:8px; height:8px; border:none;"></span> Typing...');
+                        headerStatus.html('<span class="tawasol-presence-indicator online" style="width:8px; height:8px; border:none;"></span> Typing...');
                     } else {
                         headerStatus.html('<span class="tawasol-presence-indicator ' + statusClass + '" style="width:8px; height:8px; border:none;"></span> ' + statusText);
+                    }
+
+                    if (res.photo) {
+                        $('.tawasol-header-avatar').html(`<img src="${res.photo}" style="width:100%; height:100%; object-fit:cover;">`);
+                    }
+                    if (res.display_name) {
+                        $('.tawasol-header-title').text(res.display_name);
                     }
                 }
             });
@@ -945,8 +955,19 @@
 
             let contentHtml = '';
             const mediaUrl = tawasolVars.restUrl + '/media/' + msg.id;
+            let mediaActions = '';
+
+            const icons = {
+                download: '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>',
+                forward: '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M10 9V5l7 7-7 7v-4.1c-5 0-8.5 1.6-11 5.1 1-5 4-10 11-11z"/></svg>'
+            };
+
             if (msg.content_type === 'image') {
-                contentHtml = `<img src="${mediaUrl}" style="max-width:100%; border-radius:10px; cursor:pointer;" onclick="window.open('${mediaUrl}')">`;
+                contentHtml = `<img src="${mediaUrl}" onclick="window.open('${mediaUrl}')">`;
+                mediaActions = `<div class="tawasol-media-actions">
+                    <button onclick="window.open('${mediaUrl}')" title="Download">${icons.download}</button>
+                    <button class="tawasol-forward-msg" data-id="${msg.id}" title="Forward">${icons.forward}</button>
+                </div>`;
             } else if (msg.content_type === 'file') {
                 contentHtml = `<a href="${mediaUrl}" target="_blank" style="color:inherit; text-decoration:underline;">📄 Attached File</a>`;
             } else if (msg.content_type === 'voice') {
@@ -955,17 +976,24 @@
                 contentHtml = self.escapeHTML(msg.content);
             }
 
-            list.append(`
+            const messageHtml = `
                 <div class="tawasol-message ${isMe ? 'me' : 'them'} ${msg.is_pinned == 1 ? 'pinned' : ''}" data-id="${msg.id}">
                     ${msg.is_pinned == 1 ? '<div class="tawasol-pin-indicator" style="font-size:0.7rem; color:var(--tawasol-primary);">📌 Pinned</div>' : ''}
                     <div class="tawasol-msg-content">${contentHtml}</div>
+                    ${mediaActions}
                     <div class="tawasol-msg-meta">
                         ${msg.is_edited == 1 ? '<span class="tawasol-edited-label" style="font-size:0.7rem; opacity:0.6;">(edited)</span>' : ''}
                         ${self.escapeHTML(msg.created_at)}
                         ${isMe ? `<span class="tawasol-msg-status">${statusIcon}</span>` : ''}
                     </div>
                 </div>
-            `);
+            `;
+
+            if (prepend) {
+                $('#tawasol-load-more').after(messageHtml);
+            } else {
+                list.append(messageHtml);
+            }
 
             if (!isMe && msg.status !== 'read') {
                 if (self.currentConversation == msg.conversation_id) {
@@ -1241,6 +1269,16 @@
                 self.handleStatusUpdate(update);
             });
 
+            this.sseSource.addEventListener('message_deleted', function(e) {
+                const update = JSON.parse(e.data);
+                self.handleMessageDeleted(update);
+            });
+
+            this.sseSource.addEventListener('profile_updated', function(e) {
+                const update = JSON.parse(e.data);
+                self.handleProfileUpdated(update);
+            });
+
             this.sseSource.onerror = function() {
                 self.sseSource.close();
                 setTimeout(() => self.initSSE(), 5000);
@@ -1275,6 +1313,46 @@
                 if (update.status === 'played') statusIcon = '<span class="played" style="color:#34b7f1;">✓✓</span>';
                 msgEl.find('.tawasol-msg-status').html(statusIcon);
             }
+        },
+
+        handleMessageDeleted: function(update) {
+            const msgEl = $(`.tawasol-message[data-id="${update.id}"]`);
+            if (msgEl.length > 0) {
+                msgEl.addClass('deleted').find('.tawasol-msg-content').text('[Message Deleted]');
+                msgEl.find('.tawasol-msg-status').hide();
+            }
+        },
+
+        handleProfileUpdated: function(update) {
+            const self = this;
+            // Update sidebar
+            const convItem = $(`.tawasol-conversation-item`).filter(function() {
+                // This is tricky because conversation IDs are not user IDs.
+                // But we can check if this is the current active conversation
+                return true;
+            });
+
+            // Actually we should just refresh conversations if profile changes
+            this.loadConversations();
+
+            // If current chat is this user, update header
+            // We need to know which user is in the current chat.
+            $.ajax({
+                url: tawasolVars.restUrl + '/conversations',
+                method: 'GET',
+                beforeSend: (xhr) => xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce),
+                success: function(conversations) {
+                    const conv = conversations.find(c => c.id == self.currentConversation);
+                    if (conv && conv.other_user_id == update.id) {
+                         if (update.photo) {
+                            $('.tawasol-header-avatar').html(`<img src="${update.photo}" style="width:100%; height:100%; object-fit:cover;">`);
+                        }
+                        if (update.display_name) {
+                            $('.tawasol-header-title').text(update.display_name);
+                        }
+                    }
+                }
+            });
         },
 
         playNotificationSound: function() {
