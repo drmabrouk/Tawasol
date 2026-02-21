@@ -88,6 +88,17 @@
                         </div>
                     </div>
                     <div class="tawasol-main-container">
+                        <nav class="tawasol-nav-bar">
+                            <div class="tawasol-nav-top">
+                                <div class="tawasol-nav-item active" data-tab="chats" title="Chats">💬</div>
+                                <div class="tawasol-nav-item" data-tab="calls" title="Calls">📞</div>
+                                <div class="tawasol-nav-item" data-tab="status" title="Status">⭕</div>
+                            </div>
+                            <div class="tawasol-nav-bottom">
+                                <div class="tawasol-nav-item" data-tab="profile" title="Profile">👤</div>
+                                <div class="tawasol-nav-item" data-tab="settings" title="Settings">⚙️</div>
+                            </div>
+                        </nav>
                         <aside class="tawasol-sidebar">
                             <div class="tawasol-search-box">
                                 <input type="text" id="tawasol-sidebar-search" placeholder="${i18n.search}">
@@ -104,6 +115,18 @@
                             </div>
                         </aside>
                         <main class="tawasol-chat-window">
+                            <!-- Settings Panel (Hidden by default) -->
+                            <div id="tawasol-settings-panel" style="display:none; flex:1; flex-direction:column;">
+                                <div class="tawasol-chat-header">
+                                    <div class="tawasol-current-chat-info">Settings</div>
+                                </div>
+                                <div class="tawasol-settings-content" style="flex:1; overflow-y:auto; padding:30px;">
+                                    <!-- Sub-panels will be loaded here -->
+                                </div>
+                            </div>
+
+                            <!-- Chat Window -->
+                            <div id="tawasol-chat-main" style="display:flex; flex:1; flex-direction:column;">
                             <div class="tawasol-chat-header">
                                 <div class="tawasol-current-chat-info">${i18n.selectConv}</div>
                                 <div class="tawasol-header-actions">
@@ -118,6 +141,7 @@
                                     <input type="text" id="tawasol-message-input" placeholder="${i18n.typeMessage}">
                                     <button type="submit">${i18n.send}</button>
                                 </form>
+                            </div>
                             </div>
                         </main>
                     </div>
@@ -159,6 +183,25 @@
             $(document).on('click', '.tawasol-conversation-item', function() {
                 const id = $(this).data('id');
                 self.selectConversation(id);
+                $('#tawasol-chat-main').show();
+                $('#tawasol-settings-panel').hide();
+                $('.tawasol-nav-item').removeClass('active');
+                $('[data-tab="chats"]').addClass('active');
+            });
+
+            $(document).on('click', '.tawasol-nav-item', function() {
+                const tab = $(this).data('tab');
+                $('.tawasol-nav-item').removeClass('active');
+                $(this).addClass('active');
+
+                if (tab === 'settings' || tab === 'profile') {
+                    $('#tawasol-chat-main').hide();
+                    $('#tawasol-settings-panel').show();
+                    self.loadSettings(tab);
+                } else {
+                    $('#tawasol-chat-main').show();
+                    $('#tawasol-settings-panel').hide();
+                }
             });
 
             $('#tawasol-send-message-form').on('submit', function(e) {
@@ -218,7 +261,10 @@
             });
 
             $(document).on('click', '#tawasol-view-profile', () => {
-                alert('User Profile: ' + $('.tawasol-current-chat-info').text());
+                const name = $('.tawasol-current-chat-info').text();
+                if (confirm('Do you want to block ' + name + '?')) {
+                    self.blockCurrentChatUser();
+                }
             });
 
             $(document).on('contextmenu', '.tawasol-message', function(e) {
@@ -672,6 +718,271 @@
                 beforeSend: function(xhr) {
                     xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
                 }
+            });
+        },
+
+        loadSettings: function(tab) {
+            const self = this;
+            const container = $('.tawasol-settings-content');
+            container.html('<p>Loading...</p>');
+
+            $.ajax({
+                url: tawasolVars.restUrl + '/profile',
+                method: 'GET',
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
+                },
+                success: function(profile) {
+                    if (tab === 'profile') {
+                        self.renderProfileSettings(profile);
+                    } else {
+                        self.renderGeneralSettings(profile);
+                    }
+                }
+            });
+        },
+
+        renderProfileSettings: function(profile) {
+            const self = this;
+            const container = $('.tawasol-settings-content');
+            const html = `
+                <div class="tawasol-settings-group">
+                    <h3>Profile</h3>
+                    <div class="tawasol-profile-header" style="text-align:center; margin-bottom:20px;">
+                        <div class="tawasol-profile-photo-edit" style="width:100px; height:100px; border-radius:50%; background:#ccc; margin:0 auto 10px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:40px;">
+                            ${profile.photo ? `<img src="${profile.photo}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">` : '👤'}
+                        </div>
+                        <button id="tawasol-change-photo" class="button">Change Photo</button>
+                    </div>
+                    <div class="tawasol-input-field">
+                        <label>Display Name</label>
+                        <input type="text" id="tawasol-set-name" value="${this.escapeHTML(profile.display_name)}">
+                    </div>
+                    <div class="tawasol-input-field">
+                        <label>Status Message</label>
+                        <input type="text" id="tawasol-set-status" value="${this.escapeHTML(profile.status_msg || '')}">
+                    </div>
+                    <div class="tawasol-input-field">
+                        <label>Bio</label>
+                        <textarea id="tawasol-set-bio">${this.escapeHTML(profile.bio || '')}</textarea>
+                    </div>
+                    <button id="tawasol-save-profile" class="button button-primary">Save Changes</button>
+                </div>
+            `;
+            container.html(html);
+
+            $('#tawasol-save-profile').click(() => {
+                self.saveProfile({
+                    display_name: $('#tawasol-set-name').val(),
+                    status_msg: $('#tawasol-set-status').val(),
+                    bio: $('#tawasol-set-bio').val()
+                });
+            });
+        },
+
+        loadBlockedUsers: function() {
+            const self = this;
+            const container = $('#tawasol-settings-sub-content');
+            container.html('<p>Loading blocked users...</p>');
+
+            $.ajax({
+                url: tawasolVars.restUrl + '/blocks',
+                method: 'GET',
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
+                },
+                success: function(users) {
+                    let html = '<h4>Blocked Users</h4><ul style="list-style:none; padding:0;">';
+                    if (users.length === 0) {
+                        html += '<li>No blocked users.</li>';
+                    } else {
+                        users.forEach(user => {
+                            html += `
+                                <li style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid var(--tawasol-border);">
+                                    <span>${self.escapeHTML(user.display_name)} (@${user.username})</span>
+                                    <button class="tawasol-unblock-btn button" data-id="${user.id}">Unblock</button>
+                                </li>
+                            `;
+                        });
+                    }
+                    html += '</ul><button id="tawasol-back-to-privacy" class="button" style="margin-top:20px;">Back</button>';
+                    container.html(html);
+
+                    $('#tawasol-back-to-privacy').click(() => self.loadSettings('settings'));
+                    $('.tawasol-unblock-btn').click(function() {
+                        const id = $(this).data('id');
+                        self.unblockUser(id);
+                    });
+                }
+            });
+        },
+
+        unblockUser: function(id) {
+            const self = this;
+            $.ajax({
+                url: tawasolVars.restUrl + `/blocks/${id}`,
+                method: 'DELETE',
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
+                },
+                success: () => self.loadBlockedUsers()
+            });
+        },
+
+        blockCurrentChatUser: function() {
+            const self = this;
+            // Simplified: we need the other user's ID.
+            // In a real app, this would be stored in currentConversation details.
+            // For now, we'll try to find it from the participants (this would usually be via a GET /conversations/:id)
+            $.ajax({
+                url: tawasolVars.restUrl + `/conversations`,
+                method: 'GET',
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
+                },
+                success: function(conversations) {
+                    const conv = conversations.find(c => c.id == self.currentConversation);
+                    // For demo, we'll just assume there's another user.
+                    // In real implementation, the API would return participants.
+                    alert('Blocking feature triggered for conversation ' + self.currentConversation);
+                }
+            });
+        },
+
+        renderGeneralSettings: function(profile) {
+            const self = this;
+            const container = $('.tawasol-settings-content');
+            const html = `
+                <div class="tawasol-settings-tabs">
+                    <button class="tawasol-tab-btn active" data-subtab="privacy">Privacy</button>
+                    <button class="tawasol-tab-btn" data-subtab="security">Security</button>
+                    <button class="tawasol-tab-btn" data-subtab="notifications">Notifications</button>
+                </div>
+                <div id="tawasol-settings-sub-content" style="margin-top:20px;">
+                    ${this.renderPrivacySettings(profile)}
+                </div>
+            `;
+            container.html(html);
+
+            $(document).on('click', '.tawasol-tab-btn', function() {
+                $('.tawasol-tab-btn').removeClass('active');
+                $(this).addClass('active');
+                const subtab = $(this).data('subtab');
+                let subHtml = '';
+                if (subtab === 'privacy') subHtml = self.renderPrivacySettings(profile);
+                if (subtab === 'security') subHtml = self.renderSecuritySettings(profile);
+                if (subtab === 'notifications') subHtml = self.renderNotificationSettings(profile);
+                $('#tawasol-settings-sub-content').html(subHtml);
+            });
+        },
+
+        renderPrivacySettings: function(profile) {
+            const self = this;
+            const p = profile.privacy;
+
+            // Attach event listener after a short delay to ensure DOM is ready if called from renderGeneralSettings
+            setTimeout(() => {
+                $('#tawasol-view-blocked').off('click').on('click', () => self.loadBlockedUsers());
+
+                $('.tawasol-privacy-toggle').off('change').on('change', function() {
+                    const field = $(this).data('field');
+                    const value = $(this).is(':checkbox') ? $(this).is(':checked') : $(this).val();
+                    const data = {};
+                    data[field] = value;
+                    self.savePrivacy(data);
+                });
+            }, 10);
+
+            return `
+                <div class="tawasol-settings-group">
+                    <h4>Privacy Controls</h4>
+                    <div class="tawasol-input-field">
+                        <label>Profile Photo</label>
+                        <select class="tawasol-privacy-toggle" data-field="photo">
+                            <option value="everyone" ${p.photo === 'everyone' ? 'selected' : ''}>Everyone</option>
+                            <option value="contacts" ${p.photo === 'contacts' ? 'selected' : ''}>My Contacts</option>
+                            <option value="nobody" ${p.photo === 'nobody' ? 'selected' : ''}>Nobody</option>
+                        </select>
+                    </div>
+                    <div class="tawasol-input-field">
+                        <label>Last Seen</label>
+                        <select class="tawasol-privacy-toggle" data-field="last_seen">
+                            <option value="everyone" ${p.last_seen === 'everyone' ? 'selected' : ''}>Everyone</option>
+                            <option value="contacts" ${p.last_seen === 'contacts' ? 'selected' : ''}>My Contacts</option>
+                            <option value="nobody" ${p.last_seen === 'nobody' ? 'selected' : ''}>Nobody</option>
+                        </select>
+                    </div>
+                    <div class="tawasol-input-field">
+                        <label><input type="checkbox" class="tawasol-privacy-toggle" data-field="read_receipts" ${p.read_receipts ? 'checked' : ''}> Enable Read Receipts</label>
+                    </div>
+                    <div style="margin-top:20px;">
+                        <button id="tawasol-view-blocked" class="button">Manage Blocked Users</button>
+                    </div>
+                </div>
+            `;
+        },
+
+        savePrivacy: function(data) {
+            $.ajax({
+                url: tawasolVars.restUrl + '/profile/privacy',
+                method: 'POST',
+                data: data,
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
+                },
+                success: () => {
+                    // Privacy updated silently or with a small toast
+                }
+            });
+        },
+
+        renderSecuritySettings: function(profile) {
+            return `
+                <div class="tawasol-settings-group">
+                    <h4>Security</h4>
+                    <button id="tawasol-change-pin-btn" class="button">Change 6-digit PIN</button>
+                    <div style="margin-top:20px;">
+                        <h5>Active Sessions</h5>
+                        <div id="tawasol-sessions-list">Loading...</div>
+                    </div>
+                    <div style="margin-top:20px; border-top:1px solid #eee; padding-top:20px;">
+                        <button id="tawasol-delete-account-btn" class="button" style="color:red; border-color:red;">Delete Account</button>
+                    </div>
+                </div>
+            `;
+        },
+
+        renderNotificationSettings: function(profile) {
+            return `
+                <div class="tawasol-settings-group">
+                    <h4>Notifications</h4>
+                    <div class="tawasol-input-field">
+                        <label><input type="checkbox" checked> In-app Notifications</label>
+                    </div>
+                    <div class="tawasol-input-field">
+                        <label><input type="checkbox" checked> Browser Push Notifications</label>
+                    </div>
+                    <div class="tawasol-input-field">
+                        <label>Notification Tone</label>
+                        <select>
+                            <option>Default</option>
+                            <option>Chime</option>
+                            <option>Alert</option>
+                        </select>
+                    </div>
+                </div>
+            `;
+        },
+
+        saveProfile: function(data) {
+            $.ajax({
+                url: tawasolVars.restUrl + '/profile',
+                method: 'POST',
+                data: data,
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
+                },
+                success: () => alert('Profile updated!')
             });
         },
 

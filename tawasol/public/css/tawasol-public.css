@@ -159,6 +159,38 @@
     flex: 1;
     display: flex;
     overflow: hidden;
+    position: relative;
+}
+
+.tawasol-nav-bar {
+    width: 60px;
+    background: var(--tawasol-sidebar-bg);
+    border-inline-end: 1px solid var(--tawasol-border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 0;
+    justify-content: space-between;
+}
+
+.tawasol-nav-item {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    margin-bottom: 15px;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background 0.2s;
+    color: var(--tawasol-text);
+    opacity: 0.7;
+}
+
+.tawasol-nav-item:hover, .tawasol-nav-item.active {
+    background: var(--tawasol-border);
+    opacity: 1;
 }
 
 .tawasol-sidebar {
@@ -368,6 +400,57 @@
 .tawasol-presence-indicator.typing {
     background: #3b82f6;
     animation: pulse 1s infinite;
+}
+
+.tawasol-settings-group {
+    max-width: 600px;
+    margin: 0 auto;
+    background: var(--tawasol-bg);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.tawasol-input-field {
+    margin-bottom: 20px;
+}
+
+.tawasol-input-field label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.tawasol-input-field input, .tawasol-input-field textarea, .tawasol-input-field select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--tawasol-border);
+    border-radius: 8px;
+    background: var(--tawasol-sidebar-bg);
+    color: var(--tawasol-text);
+}
+
+.tawasol-settings-tabs {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    border-bottom: 1px solid var(--tawasol-border);
+    padding-bottom: 10px;
+}
+
+.tawasol-tab-btn {
+    padding: 10px 20px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--tawasol-text);
+    opacity: 0.6;
+}
+
+.tawasol-tab-btn.active {
+    opacity: 1;
+    border-bottom: 2px solid var(--tawasol-primary);
 }
 
 .tawasol-unread-badge {

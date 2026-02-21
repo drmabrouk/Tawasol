@@ -65,11 +65,36 @@ class Tawasol_Activator {
 			PRIMARY KEY  (id)
 		) $charset_collate;";
 
+		// Blocks table
+		$table_blocks = $wpdb->prefix . 'tawasol_blocks';
+		$sql_blocks = "CREATE TABLE $table_blocks (
+			user_id bigint(20) NOT NULL,
+			blocked_user_id bigint(20) NOT NULL,
+			created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
+			PRIMARY KEY  (user_id, blocked_user_id)
+		) $charset_collate;";
+
+		// Sessions table (for multi-device management)
+		$table_sessions = $wpdb->prefix . 'tawasol_sessions';
+		$sql_sessions = "CREATE TABLE $table_sessions (
+			id bigint(20) NOT NULL AUTO_INCREMENT,
+			user_id bigint(20) NOT NULL,
+			session_token varchar(255) NOT NULL,
+			ip_address varchar(45),
+			user_agent text,
+			last_activity datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+			created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
+			PRIMARY KEY  (id),
+			KEY user_id (user_id)
+		) $charset_collate;";
+
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		dbDelta( $sql_conversations );
 		dbDelta( $sql_messages );
 		dbDelta( $sql_participants );
 		dbDelta( $sql_logs );
+		dbDelta( $sql_blocks );
+		dbDelta( $sql_sessions );
 
         // Add custom capability
         $role = get_role( 'administrator' );

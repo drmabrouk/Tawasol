@@ -45,7 +45,8 @@ class Tawasol_Public {
                 'selectConv'      => __( 'Select a conversation', 'tawasol' ),
                 'welcomeBack'     => __( 'Welcome back, %s', 'tawasol' ),
                 'usernameTaken'   => __( 'Taken. Suggestions: %s', 'tawasol' ),
-            )
+            ),
+            'iconUrl' => plugins_url( 'assets/icon.png', dirname( __FILE__ ) ),
         ) );
 	}
 

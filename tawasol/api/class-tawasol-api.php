@@ -118,6 +118,60 @@ class Tawasol_API {
 			'permission_callback' => array( $this, 'check_auth' ),
 		) );
 
+        register_rest_route( $this->namespace, '/profile', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'get_profile' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
+
+        register_rest_route( $this->namespace, '/profile', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'update_profile' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
+
+        register_rest_route( $this->namespace, '/profile/privacy', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'update_privacy' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
+
+        register_rest_route( $this->namespace, '/blocks', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'get_blocked_users' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
+
+        register_rest_route( $this->namespace, '/blocks', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'block_user' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
+
+        register_rest_route( $this->namespace, '/blocks/(?P<id>\d+)', array(
+			'methods'             => 'DELETE',
+			'callback'            => array( $this, 'unblock_user' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
+
+        register_rest_route( $this->namespace, '/security/pin', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'change_pin' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
+
+        register_rest_route( $this->namespace, '/account/export', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'export_data' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
+
+        register_rest_route( $this->namespace, '/account/delete', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'delete_account' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
+
         register_rest_route( $this->namespace, '/messages/(?P<id>\d+)', array(
 			'methods'             => 'PATCH',
 			'callback'            => array( $this, 'edit_message' ),
@@ -180,6 +234,16 @@ class Tawasol_API {
         $exists = $wpdb->get_var( $wpdb->prepare(
             "SELECT COUNT(*) FROM $table_participants WHERE conversation_id = %d AND user_id = %d",
             $conversation_id, $user_id
+        ) );
+        return (bool) $exists;
+    }
+
+    private function is_blocked( $user_id, $target_user_id ) {
+        global $wpdb;
+        $table_blocks = $wpdb->prefix . 'tawasol_blocks';
+        $exists = $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM $table_blocks WHERE user_id = %d AND blocked_user_id = %d",
+            $target_user_id, $user_id // Check if target has blocked the user
         ) );
         return (bool) $exists;
     }
@@ -475,6 +539,18 @@ class Tawasol_API {
         $params = $request->get_params();
         $conversation_id = $params['conversation_id'];
 
+        // Get participants to check for blocks
+        $table_participants = $wpdb->prefix . 'tawasol_participants';
+        $participants = $wpdb->get_col( $wpdb->prepare( "SELECT user_id FROM $table_participants WHERE conversation_id = %d", $conversation_id ) );
+
+        foreach ( $participants as $p_id ) {
+            if ( $p_id != $user_id && $this->is_blocked( $user_id, $p_id ) ) {
+                return new WP_Error( 'blocked', __( 'You cannot send messages to this user.', 'tawasol' ), array( 'status' => 403 ) );
+            }
+        }
+        $params = $request->get_params();
+        $conversation_id = $params['conversation_id'];
+
         if ( empty( $conversation_id ) || empty( $params['content'] ) ) {
             return new WP_Error( 'missing_params', __( 'Missing parameters.', 'tawasol' ), array( 'status' => 400 ) );
         }
@@ -543,6 +619,18 @@ class Tawasol_API {
 
     public function get_presence( $request ) {
         $user_id = $request['id'];
+        $current_user_id = get_current_user_id();
+
+        // Check privacy
+        $privacy = get_user_meta( $user_id, 'tawasol_privacy_online', true ) ?: 'everyone';
+        if ( $privacy === 'nobody' && $user_id != $current_user_id ) {
+             return new WP_REST_Response( array( 'user_id' => $user_id, 'status' => 'hidden' ), 200 );
+        }
+
+        if ( $this->is_blocked( $current_user_id, $user_id ) ) {
+            return new WP_REST_Response( array( 'user_id' => $user_id, 'status' => 'hidden' ), 200 );
+        }
+
         $status = get_transient( 'tawasol_presence_' . $user_id );
         $last_seen = get_user_meta( $user_id, 'tawasol_last_seen', true );
 
@@ -646,6 +734,205 @@ class Tawasol_API {
         }
 
         $wpdb->update( $table_messages, array( 'is_pinned' => $pin ? 1 : 0 ), array( 'id' => $message_id ) );
+
+        return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    /**
+     * Get current user profile and settings.
+     */
+    public function get_profile( $request ) {
+        $user_id = get_current_user_id();
+        $user = get_userdata( $user_id );
+
+        return new WP_REST_Response( array(
+            'id'           => $user->ID,
+            'display_name' => $user->display_name,
+            'username'     => $user->user_login,
+            'email'        => $user->user_email,
+            'phone'        => get_user_meta( $user_id, 'tawasol_phone', true ),
+            'photo'        => get_user_meta( $user_id, 'tawasol_photo', true ),
+            'status_msg'   => get_user_meta( $user_id, 'tawasol_status_msg', true ),
+            'bio'          => get_user_meta( $user_id, 'tawasol_bio', true ),
+            'privacy'      => array(
+                'photo'     => get_user_meta( $user_id, 'tawasol_privacy_photo', true ) ?: 'everyone',
+                'status'    => get_user_meta( $user_id, 'tawasol_privacy_status', true ) ?: 'everyone',
+                'last_seen' => get_user_meta( $user_id, 'tawasol_privacy_last_seen', true ) ?: 'everyone',
+                'online'    => get_user_meta( $user_id, 'tawasol_privacy_online', true ) ?: 'everyone',
+                'read_receipts' => (bool) get_user_meta( $user_id, 'tawasol_read_receipts', true ),
+            )
+        ), 200 );
+    }
+
+    /**
+     * Update current user profile.
+     */
+    public function update_profile( $request ) {
+        $user_id = get_current_user_id();
+        $params = $request->get_params();
+
+        if ( isset( $params['display_name'] ) ) {
+            wp_update_user( array( 'ID' => $user_id, 'display_name' => $params['display_name'] ) );
+        }
+
+        $meta_fields = array( 'tawasol_photo', 'tawasol_status_msg', 'tawasol_bio', 'tawasol_phone' );
+        foreach ( $meta_fields as $field ) {
+            if ( isset( $params[ str_replace('tawasol_', '', $field) ] ) ) {
+                update_user_meta( $user_id, $field, $params[ str_replace('tawasol_', '', $field) ] );
+            }
+        }
+
+        return $this->get_profile( $request );
+    }
+
+    /**
+     * Update current user privacy settings.
+     */
+    public function update_privacy( $request ) {
+        $user_id = get_current_user_id();
+        $params = $request->get_params();
+
+        $privacy_fields = array( 'photo', 'status', 'last_seen', 'online', 'read_receipts' );
+        foreach ( $privacy_fields as $field ) {
+            if ( isset( $params[ $field ] ) ) {
+                $meta_key = $field === 'read_receipts' ? 'tawasol_read_receipts' : 'tawasol_privacy_' . $field;
+                update_user_meta( $user_id, $meta_key, $params[ $field ] );
+            }
+        }
+
+        return $this->get_profile( $request );
+    }
+
+    /**
+     * Get list of blocked users.
+     */
+    public function get_blocked_users( $request ) {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $table_blocks = $wpdb->prefix . 'tawasol_blocks';
+
+        $blocked_ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT blocked_user_id FROM $table_blocks WHERE user_id = %d",
+            $user_id
+        ) );
+
+        $results = array();
+        if ( ! empty( $blocked_ids ) ) {
+            $users = get_users( array( 'include' => $blocked_ids ) );
+            foreach ( $users as $user ) {
+                $results[] = array(
+                    'id'           => $user->ID,
+                    'display_name' => $user->display_name,
+                    'username'     => $user->user_login,
+                );
+            }
+        }
+
+        return new WP_REST_Response( $results, 200 );
+    }
+
+    /**
+     * Block a user.
+     */
+    public function block_user( $request ) {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $blocked_user_id = $request->get_param( 'user_id' );
+
+        if ( empty( $blocked_user_id ) ) {
+            return new WP_Error( 'missing_params', __( 'User ID is required.', 'tawasol' ), array( 'status' => 400 ) );
+        }
+
+        $table_blocks = $wpdb->prefix . 'tawasol_blocks';
+        $wpdb->replace( $table_blocks, array(
+            'user_id'         => $user_id,
+            'blocked_user_id' => $blocked_user_id,
+        ) );
+
+        $this->log_event( 'user_blocked', "Blocked user ID $blocked_user_id" );
+
+        return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    /**
+     * Unblock a user.
+     */
+    public function unblock_user( $request ) {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $blocked_user_id = $request['id'];
+
+        $table_blocks = $wpdb->prefix . 'tawasol_blocks';
+        $wpdb->delete( $table_blocks, array(
+            'user_id'         => $user_id,
+            'blocked_user_id' => $blocked_user_id,
+        ) );
+
+        $this->log_event( 'user_unblocked', "Unblocked user ID $blocked_user_id" );
+
+        return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    /**
+     * Change user PIN.
+     */
+    public function change_pin( $request ) {
+        $user_id = get_current_user_id();
+        $params = $request->get_params();
+        $old_pin = $params['old_pin'] ?? '';
+        $new_pin = $params['new_pin'] ?? '';
+
+        if ( empty( $old_pin ) || empty( $new_pin ) ) {
+            return new WP_Error( 'missing_params', __( 'Old and new PIN are required.', 'tawasol' ), array( 'status' => 400 ) );
+        }
+
+        $user = get_userdata( $user_id );
+        $hashed_pin = get_user_meta( $user_id, 'tawasol_pin_hash', true );
+
+        if ( ! $hashed_pin || ! wp_check_password( $old_pin, $hashed_pin, $user_id ) ) {
+            return new WP_Error( 'invalid_pin', __( 'Incorrect old PIN.', 'tawasol' ), array( 'status' => 401 ) );
+        }
+
+        if ( ! preg_match( '/^\d{6}$/', $new_pin ) ) {
+            return new WP_Error( 'invalid_format', __( 'New PIN must be 6 digits.', 'tawasol' ), array( 'status' => 400 ) );
+        }
+
+        Tawasol_Auth::set_pin( $user_id, $new_pin );
+        $this->log_event( 'pin_changed', "Changed PIN" );
+
+        return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    /**
+     * Export user data.
+     */
+    public function export_data( $request ) {
+        $user_id = get_current_user_id();
+        $profile = $this->get_profile( $request )->get_data();
+
+        // Include chat history summary or link
+        return new WP_REST_Response( array(
+            'profile' => $profile,
+            'message' => __( 'Your data export is ready.', 'tawasol' )
+        ), 200 );
+    }
+
+    /**
+     * Delete account.
+     */
+    public function delete_account( $request ) {
+        $user_id = get_current_user_id();
+        $pin = $request->get_param( 'pin' );
+
+        $hashed_pin = get_user_meta( $user_id, 'tawasol_pin_hash', true );
+        if ( ! $hashed_pin || ! wp_check_password( $pin, $hashed_pin, $user_id ) ) {
+            return new WP_Error( 'invalid_pin', __( 'Incorrect PIN.', 'tawasol' ), array( 'status' => 401 ) );
+        }
+
+        // In WP, we might just disable the user or delete them
+        // For Tawasol, we'll mark as deactivated in meta for now
+        update_user_meta( $user_id, 'tawasol_deactivated', true );
+        $this->log_event( 'account_deactivated', "Deactivated account" );
 
         return new WP_REST_Response( array( 'success' => true ), 200 );
     }
