@@ -172,6 +172,23 @@
 
 .tawasol-search-box {
     padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.tawasol-search-type-toggle {
+    display: flex;
+    gap: 15px;
+    font-size: 0.8rem;
+    opacity: 0.8;
+}
+
+.tawasol-search-type-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
 }
 
 .tawasol-search-box input {
@@ -351,6 +368,17 @@
 .tawasol-presence-indicator.typing {
     background: #3b82f6;
     animation: pulse 1s infinite;
+}
+
+.tawasol-unread-badge {
+    background: #ef4444;
+    color: white;
+    font-size: 0.7rem;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 10px;
+    min-width: 20px;
+    text-align: center;
 }
 
 @keyframes pulse {

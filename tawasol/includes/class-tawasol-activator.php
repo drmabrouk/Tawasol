@@ -34,6 +34,8 @@ class Tawasol_Activator {
 			content text NOT NULL,
 			content_type enum('text', 'image', 'file', 'voice') DEFAULT 'text' NOT NULL,
 			status enum('sent', 'delivered', 'read') DEFAULT 'sent' NOT NULL,
+			is_pinned tinyint(1) DEFAULT 0 NOT NULL,
+			is_edited tinyint(1) DEFAULT 0 NOT NULL,
 			created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
 			PRIMARY KEY  (id),
 			KEY conversation_id (conversation_id),

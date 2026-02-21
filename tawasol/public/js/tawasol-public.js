@@ -16,6 +16,7 @@
         currentConversation: null, // ID of the currently selected conversation
         pollingInterval: null,      // Interval for fetching new messages
         presenceInterval: null,     // Interval for updating user status
+        unreadCounts: {},           // Track unread messages per conversation
         lastMessageId: 0,           // Tracking for incremental message fetching
 
         /**
@@ -86,6 +87,10 @@
                         <aside class="tawasol-sidebar">
                             <div class="tawasol-search-box">
                                 <input type="text" id="tawasol-sidebar-search" placeholder="${i18n.search}">
+                                <div class="tawasol-search-type-toggle">
+                                    <label><input type="radio" name="search_type" value="users" checked> Users</label>
+                                    <label><input type="radio" name="search_type" value="messages"> Messages</label>
+                                </div>
                             </div>
                             <div id="tawasol-global-search-results" style="display:none;">
                                 <!-- Global user search results here -->
@@ -164,8 +169,14 @@
 
             $(document).on('input', '#tawasol-sidebar-search', function() {
                 const term = $(this).val();
+                const type = $('input[name="search_type"]:checked').val();
+
                 if (term.length >= 2) {
-                    self.searchGlobalUsers(term);
+                    if (type === 'users') {
+                        self.searchGlobalUsers(term);
+                    } else {
+                        self.searchGlobalMessages(term);
+                    }
                 } else {
                     $('#tawasol-global-search-results').hide().empty();
                     $('.tawasol-conversations-list').show();
@@ -179,9 +190,110 @@
             });
 
             $(document).on('click', '.tawasol-search-result-item', function() {
-                const userId = $(this).data('id');
-                const name = $(this).data('name');
-                self.startNewChat(userId, name);
+                if ($(this).hasClass('message-result')) {
+                    self.selectConversation($(this).data('id'));
+                } else {
+                    const userId = $(this).data('id');
+                    const name = $(this).data('name');
+                    self.startNewChat(userId, name);
+                }
+                $('#tawasol-sidebar-search').val('');
+                $('#tawasol-global-search-results').hide().empty();
+                $('.tawasol-conversations-list').show();
+            });
+
+            $(document).on('click', '#tawasol-view-profile', () => {
+                alert('User Profile: ' + $('.tawasol-current-chat-info').text());
+            });
+
+            $(document).on('contextmenu', '.tawasol-message', function(e) {
+                e.preventDefault();
+                const id = $(this).data('id');
+                const isMe = $(this).hasClass('me');
+                if (isMe) {
+                    self.showMessageOptions(id, e.pageX, e.pageY);
+                } else {
+                    self.showSimpleMessageOptions(id, e.pageX, e.pageY);
+                }
+            });
+
+            $(document).on('click', '.tawasol-edit-msg', function() {
+                const id = $(this).data('id');
+                const oldContent = $(`.tawasol-message[data-id="${id}"] .tawasol-msg-content`).text();
+                const newContent = prompt('Edit message:', oldContent);
+                if (newContent && newContent !== oldContent) {
+                    self.editMessage(id, newContent);
+                }
+            });
+
+            $(document).on('click', '.tawasol-delete-msg', function() {
+                const id = $(this).data('id');
+                if (confirm('Delete this message for everyone?')) {
+                    self.deleteMessage(id);
+                }
+            });
+
+            $(document).on('click', '.tawasol-pin-msg', function() {
+                const id = $(this).data('id');
+                const isPinned = $(this).data('pinned') === true;
+                self.pinMessage(id, !isPinned);
+            });
+        },
+
+        showMessageOptions: function(id, x, y) {
+            $('.tawasol-msg-options').remove();
+            const isPinned = $(`.tawasol-message[data-id="${id}"]`).hasClass('pinned');
+            const html = `
+                <div class="tawasol-msg-options" style="position:fixed; top:${y}px; left:${x}px; background:var(--tawasol-bg); border:1px solid var(--tawasol-border); z-index:1000001; padding:5px; border-radius:4px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+                    <button class="tawasol-pin-msg" data-id="${id}" data-pinned="${isPinned}" style="display:block; width:100%; padding:5px 10px; border:none; background:none; cursor:pointer; text-align:left;">${isPinned ? 'Unpin' : 'Pin'}</button>
+                    <button class="tawasol-edit-msg" data-id="${id}" style="display:block; width:100%; padding:5px 10px; border:none; background:none; cursor:pointer; text-align:left;">Edit</button>
+                    <button class="tawasol-delete-msg" data-id="${id}" style="display:block; width:100%; padding:5px 10px; border:none; background:none; cursor:pointer; text-align:left; color:red;">Delete</button>
+                </div>
+            `;
+            $('body').append(html);
+
+            $(document).one('click', () => $('.tawasol-msg-options').remove());
+        },
+
+        showSimpleMessageOptions: function(id, x, y) {
+            $('.tawasol-msg-options').remove();
+            const isPinned = $(`.tawasol-message[data-id="${id}"]`).hasClass('pinned');
+            const html = `
+                <div class="tawasol-msg-options" style="position:fixed; top:${y}px; left:${x}px; background:var(--tawasol-bg); border:1px solid var(--tawasol-border); z-index:1000001; padding:5px; border-radius:4px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+                    <button class="tawasol-pin-msg" data-id="${id}" data-pinned="${isPinned}" style="display:block; width:100%; padding:5px 10px; border:none; background:none; cursor:pointer; text-align:left;">${isPinned ? 'Unpin' : 'Pin'}</button>
+                </div>
+            `;
+            $('body').append(html);
+            $(document).one('click', () => $('.tawasol-msg-options').remove());
+        },
+
+        searchGlobalMessages: function(term) {
+            const self = this;
+            $.ajax({
+                url: tawasolVars.restUrl + '/messages/search',
+                method: 'GET',
+                data: { term: term },
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
+                },
+                success: function(messages) {
+                    const container = $('#tawasol-global-search-results');
+                    container.empty();
+                    if (messages.length > 0) {
+                        $('.tawasol-conversations-list').hide();
+                        container.show();
+                        messages.forEach(msg => {
+                            container.append(`
+                                <div class="tawasol-search-result-item message-result" data-id="${msg.conversation_id}">
+                                    <div class="tawasol-user-info">
+                                        <div class="tawasol-msg-snippet">${self.escapeHTML(msg.content)}</div>
+                                        <div class="tawasol-user-username">${msg.created_at}</div>
+                                    </div>
+                                </div>
+                            `);
+                        });
+                    }
+                }
             });
         },
 
@@ -335,6 +447,13 @@
             $('#tawasol-chat-overlay').addClass('active');
             this.loadConversations();
             this.startPresenceUpdates();
+            this.requestNotificationPermission();
+        },
+
+        requestNotificationPermission: function() {
+            if ("Notification" in window) {
+                Notification.requestPermission();
+            }
         },
 
         startPresenceUpdates: function() {
@@ -371,6 +490,7 @@
                     list.empty();
                     conversations.forEach(conv => {
                         const title = conv.title || 'Chat #' + conv.id;
+                        const unreadCount = self.unreadCounts[conv.id] || 0;
                         list.append(`
                             <div class="tawasol-conversation-item" data-id="${conv.id}">
                                 <div class="tawasol-conv-avatar">👥</div>
@@ -378,6 +498,7 @@
                                     <div class="tawasol-conv-title">${self.escapeHTML(title)}</div>
                                     <div class="tawasol-conv-last-msg">...</div>
                                 </div>
+                                ${unreadCount > 0 ? `<div class="tawasol-unread-badge">${unreadCount}</div>` : ''}
                                 <div class="tawasol-presence-indicator" data-user-id="${conv.id}"></div>
                             </div>
                         `);
@@ -389,6 +510,7 @@
         selectConversation: function(id) {
             this.currentConversation = id;
             this.lastMessageId = 0;
+            this.unreadCounts[id] = 0;
             $('.tawasol-conversation-item').removeClass('active');
             $(`.tawasol-conversation-item[data-id="${id}"]`).addClass('active');
             $('.tawasol-messages-list').empty();
@@ -444,9 +566,11 @@
                         if (msg.status === 'read') statusIcon = '<span class="read">✓✓</span>';
 
                         list.append(`
-                            <div class="tawasol-message ${isMe ? 'me' : 'them'}" data-id="${msg.id}">
+                            <div class="tawasol-message ${isMe ? 'me' : 'them'} ${msg.is_pinned == 1 ? 'pinned' : ''}" data-id="${msg.id}">
+                                ${msg.is_pinned == 1 ? '<div class="tawasol-pin-indicator" style="font-size:0.7rem; color:var(--tawasol-primary);">📌 Pinned</div>' : ''}
                                 <div class="tawasol-msg-content">${self.escapeHTML(msg.content)}</div>
                                 <div class="tawasol-msg-meta">
+                                    ${msg.is_edited == 1 ? '<span class="tawasol-edited-label" style="font-size:0.7rem; opacity:0.6;">(edited)</span>' : ''}
                                     ${self.escapeHTML(msg.created_at)}
                                     ${isMe ? `<span class="tawasol-msg-status">${statusIcon}</span>` : ''}
                                 </div>
@@ -454,7 +578,12 @@
                         `);
 
                         if (!isMe && msg.status !== 'read') {
-                            self.markAsRead(msg.id);
+                            if (self.currentConversation == id) {
+                                self.markAsRead(msg.id);
+                            } else {
+                                self.unreadCounts[id] = (self.unreadCounts[id] || 0) + 1;
+                                self.showNotification(msg);
+                            }
                         }
 
                         self.lastMessageId = Math.max(self.lastMessageId, msg.id);
@@ -491,12 +620,69 @@
             });
         },
 
+        showNotification: function(msg) {
+            if ("Notification" in window && Notification.permission === "granted") {
+                new Notification("New Tawasol Message", {
+                    body: msg.content,
+                    icon: tawasolVars.iconUrl // Assuming we add this to vars
+                });
+            }
+        },
+
         markAsRead: function(messageId) {
             $.ajax({
                 url: tawasolVars.restUrl + `/messages/${messageId}/read`,
                 method: 'POST',
                 beforeSend: function(xhr) {
                     xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
+                }
+            });
+        },
+
+        editMessage: function(id, content) {
+            const self = this;
+            $.ajax({
+                url: tawasolVars.restUrl + `/messages/${id}`,
+                method: 'PATCH',
+                data: { content: content },
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
+                },
+                success: () => {
+                    self.lastMessageId = 0;
+                    self.selectConversation(self.currentConversation);
+                }
+            });
+        },
+
+        pinMessage: function(id, pin) {
+            const self = this;
+            $.ajax({
+                url: tawasolVars.restUrl + `/messages/${id}/pin`,
+                method: 'POST',
+                data: { pin: pin },
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
+                },
+                success: () => {
+                    self.lastMessageId = 0;
+                    self.selectConversation(self.currentConversation);
+                }
+            });
+        },
+
+        deleteMessage: function(id) {
+            const self = this;
+            $.ajax({
+                url: tawasolVars.restUrl + `/messages/${id}`,
+                method: 'DELETE',
+                data: { everyone: 'true' },
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
+                },
+                success: () => {
+                    self.lastMessageId = 0;
+                    self.selectConversation(self.currentConversation);
                 }
             });
         }
