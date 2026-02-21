@@ -549,3 +549,11 @@
     border-inline-end: 0;
     border-inline-start: 1px solid var(--tawasol-border);
 }
+
+.tawasol-message.tawasol-msg-sending {
+    opacity: 0.7;
+}
+
+.tawasol-message.tawasol-msg-failed {
+    border: 1px solid #ef4444;
+}

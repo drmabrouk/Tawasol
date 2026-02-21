@@ -16,6 +16,7 @@
         currentConversation: null, // ID of the currently selected conversation
         pollingInterval: null,      // Interval for fetching new messages
         presenceInterval: null,     // Interval for updating user status
+        sseSource: null,            // EventSource object
         typingTimeout: null,        // Timeout for debouncing typing indicator
         isTyping: false,            // Current typing status
         unreadCounts: {},           // Track unread messages per conversation
@@ -32,6 +33,7 @@
                 this.renderLogin();
             } else {
                 this.loadConversations();
+                this.initSSE();
             }
         },
 
@@ -103,7 +105,10 @@
                         </nav>
                         <aside class="tawasol-sidebar">
                             <div class="tawasol-search-box">
-                                <input type="text" id="tawasol-sidebar-search" placeholder="${i18n.search}">
+                                <div style="display:flex; gap:10px; margin-bottom:10px;">
+                                    <input type="text" id="tawasol-sidebar-search" placeholder="${i18n.search}" style="flex:1;">
+                                    <button id="tawasol-new-group-btn" title="New Group" style="background:var(--tawasol-primary); color:white; border:none; border-radius:8px; padding:0 12px; cursor:pointer;">+</button>
+                                </div>
                                 <div class="tawasol-search-type-toggle">
                                     <label><input type="radio" name="search_type" value="users" checked> Users</label>
                                     <label><input type="radio" name="search_type" value="messages"> Messages</label>
@@ -140,6 +145,8 @@
                             </div>
                             <div class="tawasol-message-input-area">
                                 <form id="tawasol-send-message-form">
+                                    <button type="button" id="tawasol-attach-btn" title="Attach File">📎</button>
+                                    <input type="file" id="tawasol-file-input" style="display:none;">
                                     <input type="text" id="tawasol-message-input" placeholder="${i18n.typeMessage}">
                                     <button type="submit">${i18n.send}</button>
                                 </form>
@@ -211,6 +218,14 @@
                 self.sendMessage();
             });
 
+            $(document).on('click', '#tawasol-attach-btn', () => {
+                $('#tawasol-file-input').click();
+            });
+
+            $(document).on('change', '#tawasol-file-input', function() {
+                self.handleFileUpload(this.files[0]);
+            });
+
             $(document).on('input', '#tawasol-message-input', function() {
                 self.handleTyping();
             });
@@ -270,6 +285,13 @@
                 const name = $('.tawasol-current-chat-info').text();
                 if (confirm('Do you want to block ' + name + '?')) {
                     self.blockCurrentChatUser();
+                }
+            });
+
+            $(document).on('click', '#tawasol-new-group-btn', () => {
+                const name = prompt('Enter Group Name:');
+                if (name) {
+                    self.createNewGroup(name);
                 }
             });
 
@@ -701,35 +723,7 @@
                     const shouldScroll = isPolling ? (list.scrollTop() + list.innerHeight() >= list[0].scrollHeight - 50) : true;
 
                     messages.forEach(msg => {
-                        if (msg.id <= self.lastMessageId) return;
-
-                        const isMe = msg.sender_id == tawasolVars.userId;
-                        let statusIcon = '✓';
-                        if (msg.status === 'delivered') statusIcon = '✓✓';
-                        if (msg.status === 'read') statusIcon = '<span class="read">✓✓</span>';
-
-                        list.append(`
-                            <div class="tawasol-message ${isMe ? 'me' : 'them'} ${msg.is_pinned == 1 ? 'pinned' : ''}" data-id="${msg.id}">
-                                ${msg.is_pinned == 1 ? '<div class="tawasol-pin-indicator" style="font-size:0.7rem; color:var(--tawasol-primary);">📌 Pinned</div>' : ''}
-                                <div class="tawasol-msg-content">${self.escapeHTML(msg.content)}</div>
-                                <div class="tawasol-msg-meta">
-                                    ${msg.is_edited == 1 ? '<span class="tawasol-edited-label" style="font-size:0.7rem; opacity:0.6;">(edited)</span>' : ''}
-                                    ${self.escapeHTML(msg.created_at)}
-                                    ${isMe ? `<span class="tawasol-msg-status">${statusIcon}</span>` : ''}
-                                </div>
-                            </div>
-                        `);
-
-                        if (!isMe && msg.status !== 'read') {
-                            if (self.currentConversation == id) {
-                                self.markAsRead(msg.id);
-                            } else {
-                                self.unreadCounts[id] = (self.unreadCounts[id] || 0) + 1;
-                                self.showNotification(msg);
-                            }
-                        }
-
-                        self.lastMessageId = Math.max(self.lastMessageId, msg.id);
+                        self.renderMessage(msg, list);
                     });
 
                     if (shouldScroll) {
@@ -739,11 +733,108 @@
             });
         },
 
+        renderMessage: function(msg, list) {
+            const self = this;
+            if (msg.id <= self.lastMessageId) return;
+            if ($(`.tawasol-message[data-id="${msg.id}"]`).length > 0) return;
+
+            const isMe = msg.sender_id == tawasolVars.userId;
+            let statusIcon = '✓';
+            if (msg.status === 'delivered') statusIcon = '✓✓';
+            if (msg.status === 'read') statusIcon = '<span class="read">✓✓</span>';
+
+            let contentHtml = '';
+            if (msg.content_type === 'image') {
+                contentHtml = `<img src="${msg.content}" style="max-width:100%; border-radius:10px; cursor:pointer;" onclick="window.open('${msg.content}')">`;
+            } else if (msg.content_type === 'file') {
+                contentHtml = `<a href="${msg.content}" target="_blank" style="color:inherit; text-decoration:underline;">📄 Attached File</a>`;
+            } else {
+                contentHtml = self.escapeHTML(msg.content);
+            }
+
+            list.append(`
+                <div class="tawasol-message ${isMe ? 'me' : 'them'} ${msg.is_pinned == 1 ? 'pinned' : ''}" data-id="${msg.id}">
+                    ${msg.is_pinned == 1 ? '<div class="tawasol-pin-indicator" style="font-size:0.7rem; color:var(--tawasol-primary);">📌 Pinned</div>' : ''}
+                    <div class="tawasol-msg-content">${contentHtml}</div>
+                    <div class="tawasol-msg-meta">
+                        ${msg.is_edited == 1 ? '<span class="tawasol-edited-label" style="font-size:0.7rem; opacity:0.6;">(edited)</span>' : ''}
+                        ${self.escapeHTML(msg.created_at)}
+                        ${isMe ? `<span class="tawasol-msg-status">${statusIcon}</span>` : ''}
+                    </div>
+                </div>
+            `);
+
+            if (!isMe && msg.status !== 'read') {
+                if (self.currentConversation == msg.conversation_id) {
+                    self.markAsRead(msg.id);
+                } else {
+                    self.unreadCounts[msg.conversation_id] = (self.unreadCounts[msg.conversation_id] || 0) + 1;
+                    self.showNotification(msg);
+                }
+            }
+
+            self.lastMessageId = Math.max(self.lastMessageId, msg.id);
+        },
+
+        handleFileUpload: function(file) {
+            const self = this;
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            $.ajax({
+                url: tawasolVars.restUrl + '/messages/upload',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                beforeSend: (xhr) => xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce),
+                success: (res) => {
+                    const type = file.type.startsWith('image/') ? 'image' : 'file';
+                    self.sendMediaMessage(res.url, type);
+                }
+            });
+        },
+
+        sendMediaMessage: function(url, type) {
+            const self = this;
+            $.ajax({
+                url: tawasolVars.restUrl + '/messages',
+                method: 'POST',
+                beforeSend: (xhr) => xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce),
+                data: {
+                    conversation_id: this.currentConversation,
+                    content: url,
+                    content_type: type
+                },
+                success: () => {
+                    self.loadMessages(self.currentConversation);
+                }
+            });
+        },
+
         sendMessage: function(retryCount = 0) {
             const self = this;
             const input = $('#tawasol-message-input');
             const content = input.val();
             if (!content || !this.currentConversation) return;
+
+            // Optimistic UI: Append message immediately
+            const tempId = 'temp-' + Date.now();
+            const list = $('.tawasol-messages-list');
+            const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            list.append(`
+                <div class="tawasol-message me tawasol-msg-sending" data-temp-id="${tempId}">
+                    <div class="tawasol-msg-content">${self.escapeHTML(content)}</div>
+                    <div class="tawasol-msg-meta">
+                        ${timestamp} <span class="tawasol-msg-status">...</span>
+                    </div>
+                </div>
+            `);
+            list.scrollTop(list[0].scrollHeight);
+            input.val('');
 
             $.ajax({
                 url: tawasolVars.restUrl + '/messages',
@@ -756,17 +847,104 @@
                     content: content,
                     content_type: 'text'
                 },
-                success: function() {
-                    input.val('');
-                    self.loadMessages(self.currentConversation);
+                success: function(res) {
+                    const tempMsg = $(`[data-temp-id="${tempId}"]`);
+                    tempMsg.removeClass('tawasol-msg-sending').attr('data-id', res.message_id);
+                    tempMsg.find('.tawasol-msg-status').text('✓');
+                    // We don't call loadMessages immediately to avoid duplication if SSE or Polling is active
+                    // But we update lastMessageId so polling doesn't fetch it again
+                    self.lastMessageId = Math.max(self.lastMessageId, res.message_id);
                 },
                 error: function() {
                     if (retryCount < 3) {
                         const delay = Math.pow(2, retryCount) * 1000;
                         setTimeout(() => self.sendMessage(retryCount + 1), delay);
                     } else {
+                        const tempMsg = $(`[data-temp-id="${tempId}"]`);
+                        tempMsg.removeClass('tawasol-msg-sending').addClass('tawasol-msg-failed');
+                        tempMsg.find('.tawasol-msg-status').text('❌');
                         alert('Failed to send message after multiple attempts.');
                     }
+                }
+            });
+        },
+
+        initSSE: function() {
+            const self = this;
+            if (typeof(EventSource) === "undefined") return;
+
+            if (this.sseSource) this.sseSource.close();
+
+            const url = new URL(tawasolVars.restUrl + '/realtime/stream');
+            url.searchParams.append('_wpnonce', tawasolVars.nonce);
+            url.searchParams.append('last_id', this.lastMessageId);
+
+            this.sseSource = new EventSource(url.toString());
+
+            this.sseSource.addEventListener('message', function(e) {
+                const msg = JSON.parse(e.data);
+                self.handleIncomingSSEMessage(msg);
+            });
+
+            this.sseSource.addEventListener('status_update', function(e) {
+                const update = JSON.parse(e.data);
+                self.handleStatusUpdate(update);
+            });
+
+            this.sseSource.onerror = function() {
+                self.sseSource.close();
+                setTimeout(() => self.initSSE(), 5000);
+            };
+        },
+
+        handleIncomingSSEMessage: function(msg) {
+            const list = $('.tawasol-messages-list');
+            const isCurrentConv = this.currentConversation == msg.conversation_id;
+            const isMe = msg.sender_id == tawasolVars.userId;
+
+            if (isCurrentConv) {
+                this.renderMessage(msg, list);
+                list.scrollTop(list[0].scrollHeight);
+            } else {
+                this.renderMessage(msg, $('<div>')); // Just to process unread/lastId
+                this.updateUnreadBadges();
+            }
+
+            if (!isMe) {
+                this.playNotificationSound();
+            }
+        },
+
+        handleStatusUpdate: function(update) {
+            const msgEl = $(`.tawasol-message[data-id="${update.id}"]`);
+            if (msgEl.length > 0) {
+                let statusIcon = '✓';
+                if (update.status === 'delivered') statusIcon = '✓✓';
+                if (update.status === 'read') statusIcon = '<span class="read">✓✓</span>';
+                msgEl.find('.tawasol-msg-status').html(statusIcon);
+            }
+        },
+
+        playNotificationSound: function() {
+            // High-speed notification sound
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
+            audio.play().catch(e => {}); // Silent fail if blocked
+        },
+
+        updateUnreadBadges: function() {
+            const self = this;
+            $('.tawasol-conversation-item').each(function() {
+                const id = $(this).data('id');
+                const count = self.unreadCounts[id] || 0;
+                let badge = $(this).find('.tawasol-unread-badge');
+                if (count > 0) {
+                    if (badge.length === 0) {
+                        $(this).append(`<div class="tawasol-unread-badge">${count}</div>`);
+                    } else {
+                        badge.text(count);
+                    }
+                } else {
+                    badge.remove();
                 }
             });
         },
@@ -895,6 +1073,24 @@
                     xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
                 },
                 success: () => self.loadBlockedUsers()
+            });
+        },
+
+        createNewGroup: function(name) {
+            const self = this;
+            $.ajax({
+                url: tawasolVars.restUrl + '/conversations',
+                method: 'POST',
+                beforeSend: (xhr) => xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce),
+                data: {
+                    type: 'group',
+                    title: name,
+                    participants: [] // In real app, we'd show a multi-select
+                },
+                success: (res) => {
+                    self.loadConversations();
+                    self.selectConversation(res.conversation_id);
+                }
             });
         },
 

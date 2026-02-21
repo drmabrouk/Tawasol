@@ -37,6 +37,7 @@ class Tawasol_Activator {
 			is_pinned tinyint(1) DEFAULT 0 NOT NULL,
 			is_edited tinyint(1) DEFAULT 0 NOT NULL,
 			created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
+			updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
 			PRIMARY KEY  (id),
 			KEY conversation_id (conversation_id),
 			KEY sender_id (sender_id),

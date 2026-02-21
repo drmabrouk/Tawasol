@@ -202,6 +202,12 @@ class Tawasol_API {
 			'permission_callback' => array( $this, 'check_auth' ),
 		) );
 
+        register_rest_route( $this->namespace, '/realtime/stream', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'stream_updates' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
+
         register_rest_route( $this->namespace, '/sessions', array(
 			'methods'             => 'GET',
 			'callback'            => array( $this, 'get_sessions' ),
@@ -281,8 +287,25 @@ class Tawasol_API {
     public function check_user( $request ) {
         $identifier = $request->get_param( 'identifier' );
 
-        // Strictly by username
+        // Try username first
         $user = get_user_by( 'login', $identifier );
+
+        if ( ! $user ) {
+            // Try email
+            $user = get_user_by( 'email', $identifier );
+        }
+
+        if ( ! $user ) {
+            // Try phone
+            $users = get_users( array(
+                'meta_key'   => 'tawasol_phone',
+                'meta_value' => $identifier,
+                'number'     => 1,
+            ) );
+            if ( ! empty( $users ) ) {
+                $user = $users[0];
+            }
+        }
 
         if ( $user ) {
             return new WP_REST_Response( array(
@@ -1105,6 +1128,71 @@ class Tawasol_API {
         }
 
         return new WP_Error( 'invalid_otp', __( 'Invalid or expired OTP.', 'tawasol' ), array( 'status' => 401 ) );
+    }
+
+    public function stream_updates( $request ) {
+        $user_id = get_current_user_id();
+
+        header('Content-Type: text/event-stream');
+        header('Cache-Control: no-cache');
+        header('Connection: keep-alive');
+        header('X-Accel-Buffering: no');
+
+        $last_id = (int) $request->get_param( 'last_id' ) ?: 0;
+        $last_status_check = current_time( 'mysql' );
+        $start_time = time();
+
+        while (time() - $start_time < 50) {
+            global $wpdb;
+            $table_messages = $wpdb->prefix . 'tawasol_messages';
+            $table_participants = $wpdb->prefix . 'tawasol_participants';
+
+            // New messages
+            $new_messages = $wpdb->get_results( $wpdb->prepare(
+                "SELECT m.id, m.conversation_id, m.sender_id, m.content, m.content_type, m.status, m.created_at, m.is_pinned, m.is_edited
+                 FROM $table_messages m
+                 JOIN $table_participants p ON m.conversation_id = p.conversation_id
+                 WHERE p.user_id = %d AND m.id > %d
+                 ORDER BY m.id ASC",
+                $user_id, $last_id
+            ) );
+
+            if ( ! empty( $new_messages ) ) {
+                foreach ( $new_messages as $msg ) {
+                    if ( $msg->content_type === 'text' ) {
+                        $msg->content = Tawasol_Encryption::decrypt( $msg->content );
+                    }
+                    echo "event: message\n";
+                    echo "data: " . json_encode( $msg ) . "\n\n";
+                    $last_id = max($last_id, $msg->id);
+                }
+            }
+
+            // Status updates
+            $status_updates = $wpdb->get_results( $wpdb->prepare(
+                "SELECT id, conversation_id, status FROM $table_messages
+                 WHERE sender_id = %d AND updated_at > %s",
+                $user_id, $last_status_check
+            ) );
+
+            if ( ! empty( $status_updates ) ) {
+                foreach ( $status_updates as $update ) {
+                    echo "event: status_update\n";
+                    echo "data: " . json_encode( $update ) . "\n\n";
+                }
+            }
+            $last_status_check = current_time( 'mysql' );
+
+            // Ping to keep connection alive
+            echo "event: ping\ndata: {\"time\": " . time() . "}\n\n";
+
+            if (ob_get_level() > 0) ob_flush();
+            flush();
+
+            if ( connection_aborted() ) break;
+            sleep(1);
+        }
+        exit;
     }
 
     public function upload_file( $request ) {
