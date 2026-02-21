@@ -50,14 +50,25 @@ class Tawasol {
 	 * Load the required dependencies for this plugin.
 	 */
 	private function load_dependencies() {
-		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-tawasol-loader.php';
-		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-tawasol-i18n.php';
-		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-tawasol-auth.php';
-		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-tawasol-encryption.php';
-		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-tawasol-shortcodes.php';
-		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/class-tawasol-admin.php';
-		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'public/class-tawasol-public.php';
-		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'api/class-tawasol-api.php';
+		$plugin_dir = plugin_dir_path( dirname( __FILE__ ) );
+
+		// Core
+		require_once $plugin_dir . 'includes/class-tawasol-loader.php';
+		require_once $plugin_dir . 'includes/class-tawasol-i18n.php';
+		require_once $plugin_dir . 'includes/class-tawasol-shortcodes.php';
+
+		// Modules
+		require_once $plugin_dir . 'modules/auth/class-tawasol-auth.php';
+		require_once $plugin_dir . 'modules/utils/class-tawasol-encryption.php';
+		require_once $plugin_dir . 'modules/chat/class-tawasol-chat-engine.php';
+
+		// Database
+		require_once $plugin_dir . 'database/class-tawasol-db-messenger.php';
+
+		// UI / API
+		require_once $plugin_dir . 'admin/class-tawasol-admin.php';
+		require_once $plugin_dir . 'public/class-tawasol-public.php';
+		require_once $plugin_dir . 'api/class-tawasol-api.php';
 
 		$this->loader = new Tawasol_Loader();
 	}

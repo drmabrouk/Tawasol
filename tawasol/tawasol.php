@@ -24,6 +24,8 @@ if ( ! defined( 'WPINC' ) ) {
  * Start at version 1.0.0 and use SemVer - https://semver.org
  */
 define( 'TAWASOL_VERSION', '1.0.0' );
+define( 'TAWASOL_PATH', plugin_dir_path( __FILE__ ) );
+define( 'TAWASOL_URL', plugin_dir_url( __FILE__ ) );
 
 /**
  * The code that runs during plugin activation.

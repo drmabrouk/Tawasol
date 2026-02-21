@@ -30,8 +30,30 @@ class Tawasol_Admin {
 
         wp_localize_script( $this->plugin_name . '-public', 'tawasolVars', array(
             'restUrl' => esc_url_raw( rest_url( 'tawasol/v1' ) ),
+            'homeUrl' => esc_url( home_url() ),
             'nonce'   => wp_create_nonce( 'wp_rest' ),
             'userId'  => get_current_user_id(),
+            'i18n'    => array(
+                'search'          => __( 'Search chats...', 'tawasol' ),
+                'typeMessage'     => __( 'Type a message...', 'tawasol' ),
+                'send'            => __( 'Send', 'tawasol' ),
+                'welcome'         => __( 'Welcome to Tawasol', 'tawasol' ),
+                'login'           => __( 'Login', 'tawasol' ),
+                'register'        => __( 'Register', 'tawasol' ),
+                'continue'        => __( 'Continue', 'tawasol' ),
+                'username'        => __( 'Username', 'tawasol' ),
+                'email'           => __( 'Email', 'tawasol' ),
+                'phone'           => __( 'Phone', 'tawasol' ),
+                'pin'             => __( '6-digit PIN', 'tawasol' ),
+                'selectConv'      => __( 'Select a conversation', 'tawasol' ),
+                'welcomeBack'     => __( 'Welcome back, %s', 'tawasol' ),
+                'usernameTaken'   => __( 'Taken. Suggestions: %s', 'tawasol' ),
+                'authFailed'      => __( 'Invalid username or PIN.', 'tawasol' ),
+                'otpRequired'     => __( 'OTP verification required.', 'tawasol' ),
+                'otpSent'         => __( 'OTP sent to your registered device.', 'tawasol' ),
+                'retry'           => __( 'Retrying...', 'tawasol' ),
+            ),
+            'iconUrl' => plugins_url( 'assets/icon.png', dirname( dirname( __FILE__ ) ) ),
         ) );
 	}
 

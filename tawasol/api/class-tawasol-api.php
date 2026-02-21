@@ -17,6 +17,7 @@ class Tawasol_API {
 	private $plugin_name;
 	private $version;
     private $namespace;
+    private $engine;
 
 	/**
 	 * Initialize the class and set its properties.
@@ -28,6 +29,7 @@ class Tawasol_API {
 		$this->plugin_name = $plugin_name;
 		$this->version = $version;
         $this->namespace = 'tawasol/v1';
+        $this->engine = new Tawasol_Chat_Engine();
 	}
 
 	/**
@@ -460,7 +462,6 @@ class Tawasol_API {
      * @return WP_REST_Response
      */
     public function search_messages( $request ) {
-        global $wpdb;
         $user_id = get_current_user_id();
         $term = $request->get_param( 'term' );
 
@@ -468,26 +469,7 @@ class Tawasol_API {
             return new WP_REST_Response( array(), 200 );
         }
 
-        $table_messages = $wpdb->prefix . 'tawasol_messages';
-        $table_participants = $wpdb->prefix . 'tawasol_participants';
-
-        // Note: Simple LIKE search for demo. In production, consider full-text index.
-        // We must also decrypt each message to check if it matches, but SQL can't do that easily.
-        // For efficiency, we search encrypted content if term matches or fetch all and filter in PHP.
-        // Here we'll do the simple SQL search on raw content for the demo purpose.
-        $results = $wpdb->get_results( $wpdb->prepare(
-            "SELECT m.* FROM $table_messages m
-             JOIN $table_participants p ON m.conversation_id = p.conversation_id
-             WHERE p.user_id = %d AND m.content LIKE %s
-             ORDER BY m.created_at DESC LIMIT 50",
-            $user_id, '%' . $wpdb->esc_like( $term ) . '%'
-        ) );
-
-        foreach ( $results as &$msg ) {
-            if ( $msg->content_type === 'text' ) {
-                $msg->content = Tawasol_Encryption::decrypt( $msg->content );
-            }
-        }
+        $results = $this->engine->search_messages( $user_id, $term );
 
         return new WP_REST_Response( $results, 200 );
     }
@@ -513,63 +495,28 @@ class Tawasol_API {
     }
 
     public function get_conversations() {
-        global $wpdb;
         $user_id = get_current_user_id();
-        $table_conversations = $wpdb->prefix . 'tawasol_conversations';
-        $table_participants = $wpdb->prefix . 'tawasol_participants';
-
-        $conversations = $wpdb->get_results( $wpdb->prepare(
-            "SELECT c.*,
-                (SELECT user_id FROM $table_participants p2 WHERE p2.conversation_id = c.id AND p2.user_id != %d LIMIT 1) as other_user_id
-             FROM $table_conversations c
-             JOIN $table_participants p ON c.id = p.conversation_id
-             WHERE p.user_id = %d",
-            $user_id, $user_id
-        ) );
-
+        $conversations = $this->engine->get_conversations( $user_id );
         return new WP_REST_Response( $conversations, 200 );
     }
 
     public function create_conversation( $request ) {
-        global $wpdb;
         $user_id = get_current_user_id();
         $params = $request->get_params();
         $type = $params['type'] ?? 'one-on-one';
-        $participants = $params['participants'] ?? array(); // Array of user IDs
+        $participants = $params['participants'] ?? array();
         $title = $params['title'] ?? '';
 
-        $table_conversations = $wpdb->prefix . 'tawasol_conversations';
-        $table_participants = $wpdb->prefix . 'tawasol_participants';
+        $conversation_id = $this->engine->start_conversation( $title, $type, $user_id, $participants );
 
-        $wpdb->insert( $table_conversations, array(
-            'title' => $title,
-            'type'  => $type,
-        ) );
-        $conversation_id = $wpdb->insert_id;
-
-        // Add creator as participant
-        $wpdb->insert( $table_participants, array(
-            'conversation_id' => $conversation_id,
-            'user_id'         => $user_id,
-            'is_admin'        => 1,
-        ) );
-
-        // Add other participants
-        foreach ( $participants as $p_id ) {
-            if ( $p_id != $user_id ) {
-                $wpdb->insert( $table_participants, array(
-                    'conversation_id' => $conversation_id,
-                    'user_id'         => $p_id,
-                    'is_admin'        => 0,
-                ) );
-            }
+        if ( ! $conversation_id ) {
+            return new WP_Error( 'db_error', __( 'Failed to create conversation.', 'tawasol' ), array( 'status' => 500 ) );
         }
 
         return new WP_REST_Response( array( 'success' => true, 'conversation_id' => $conversation_id ), 201 );
     }
 
     public function get_messages( $request ) {
-        global $wpdb;
         $conversation_id = $request['id'];
         $user_id = get_current_user_id();
 
@@ -578,47 +525,7 @@ class Tawasol_API {
         }
 
         $after = $request->get_param( 'after' ) ?: 0;
-        $table_messages = $wpdb->prefix . 'tawasol_messages';
-
-        $messages = $wpdb->get_results( $wpdb->prepare(
-            "SELECT m.*, u.display_name as sender_name
-             FROM $table_messages m
-             JOIN {$wpdb->users} u ON m.sender_id = u.ID
-             WHERE m.conversation_id = %d AND m.id > %d
-             ORDER BY m.created_at ASC",
-            $conversation_id, $after
-        ) );
-
-        // Update status to 'delivered' for messages received by others
-        if ( ! empty( $messages ) ) {
-            $msg_ids = array();
-            foreach ( $messages as $message ) {
-                if ( $message->sender_id != $user_id && $message->status === 'sent' ) {
-                    $msg_ids[] = $message->id;
-                }
-            }
-
-            if ( ! empty( $msg_ids ) ) {
-                $ids_placeholder = implode( ',', array_fill( 0, count( $msg_ids ), '%d' ) );
-                $wpdb->query( $wpdb->prepare(
-                    "UPDATE $table_messages SET status = 'delivered' WHERE id IN ($ids_placeholder)",
-                    ...$msg_ids
-                ) );
-
-                // Update the local objects too
-                foreach ( $messages as &$message ) {
-                    if ( in_array( $message->id, $msg_ids ) ) {
-                        $message->status = 'delivered';
-                    }
-                }
-            }
-        }
-
-        foreach ( $messages as &$message ) {
-            if ( $message->content_type === 'text' ) {
-                $message->content = Tawasol_Encryption::decrypt( $message->content );
-            }
-        }
+        $messages = $this->engine->get_messages( $conversation_id, $user_id, $after );
 
         return new WP_REST_Response( $messages, 200 );
     }
@@ -630,12 +537,22 @@ class Tawasol_API {
 	 * @return WP_REST_Response|WP_Error
 	 */
     public function send_message( $request ) {
-        global $wpdb;
         $user_id = get_current_user_id();
         $params = $request->get_params();
         $conversation_id = $params['conversation_id'];
+        $content = $params['content'];
+        $content_type = $params['content_type'] ?? 'text';
 
-        // Get participants to check for blocks
+        if ( empty( $conversation_id ) || empty( $content ) ) {
+            return new WP_Error( 'missing_params', __( 'Missing parameters.', 'tawasol' ), array( 'status' => 400 ) );
+        }
+
+        if ( ! $this->is_participant( $conversation_id, $user_id ) ) {
+            return new WP_Error( 'unauthorized', __( 'You are not a participant of this conversation.', 'tawasol' ), array( 'status' => 403 ) );
+        }
+
+        // Check for blocks
+        global $wpdb;
         $table_participants = $wpdb->prefix . 'tawasol_participants';
         $participants = $wpdb->get_col( $wpdb->prepare( "SELECT user_id FROM $table_participants WHERE conversation_id = %d", $conversation_id ) );
 
@@ -644,46 +561,12 @@ class Tawasol_API {
                 return new WP_Error( 'blocked', __( 'You cannot send messages to this user.', 'tawasol' ), array( 'status' => 403 ) );
             }
         }
-        $params = $request->get_params();
-        $conversation_id = $params['conversation_id'];
 
-        if ( empty( $conversation_id ) || empty( $params['content'] ) ) {
-            return new WP_Error( 'missing_params', __( 'Missing parameters.', 'tawasol' ), array( 'status' => 400 ) );
-        }
+        $message_id = $this->engine->send_message( $conversation_id, $user_id, $content, $content_type );
 
-        if ( ! $this->is_participant( $conversation_id, $user_id ) ) {
-            return new WP_Error( 'unauthorized', __( 'You are not a participant of this conversation.', 'tawasol' ), array( 'status' => 403 ) );
-        }
-
-        $content = $params['content'];
-        $content_type = $params['content_type'] ?? 'text';
-
-        if ( $content_type === 'text' ) {
-            $content = Tawasol_Encryption::encrypt( $content );
-        }
-
-        $table_messages = $wpdb->prefix . 'tawasol_messages';
-
-        $wpdb->query( 'START TRANSACTION' );
-
-        $inserted = $wpdb->insert( $table_messages, array(
-            'conversation_id' => $params['conversation_id'],
-            'sender_id'       => $user_id,
-            'content'         => $content,
-            'content_type'    => $content_type,
-            'status'          => 'sent'
-        ) );
-
-        if ( false === $inserted ) {
-            $wpdb->query( 'ROLLBACK' );
+        if ( ! $message_id ) {
             return new WP_Error( 'db_error', __( 'Failed to save message.', 'tawasol' ), array( 'status' => 500 ) );
         }
-
-        $message_id = $wpdb->insert_id;
-        $wpdb->query( 'COMMIT' );
-
-        // Trigger push notifications
-        do_action( 'tawasol_message_sent', $message_id, $params['conversation_id'], $user_id );
 
         return new WP_REST_Response( array( 'success' => true, 'message_id' => $message_id ), 200 );
     }
@@ -826,8 +709,12 @@ class Tawasol_API {
             // Actually delete or mark as deleted
             $wpdb->update( $table_messages, array( 'content' => '[Message Deleted]', 'content_type' => 'text' ), array( 'id' => $message_id ) );
         } else {
-            // Local delete for user only - usually requires a mapping table, but we'll simulate with meta for now
-            update_user_meta( $user_id, 'tawasol_deleted_msg_' . $message_id, true );
+            // Local delete for user only
+            $deleted_ids = get_user_meta( $user_id, 'tawasol_deleted_messages', true ) ?: array();
+            if ( ! in_array( $message_id, $deleted_ids ) ) {
+                $deleted_ids[] = (int) $message_id;
+                update_user_meta( $user_id, 'tawasol_deleted_messages', $deleted_ids );
+            }
         }
 
         return new WP_REST_Response( array( 'success' => true ), 200 );
@@ -1200,10 +1087,22 @@ class Tawasol_API {
             require_once ABSPATH . 'wp-admin/includes/file.php';
         }
 
+        $user_id = get_current_user_id();
+        $chat_id = $request->get_param('conversation_id') ?: 'misc';
         $files = $request->get_file_params();
+
         if ( empty( $files['file'] ) ) {
             return new WP_Error( 'no_file', __( 'No file uploaded.', 'tawasol' ), array( 'status' => 400 ) );
         }
+
+        // Custom upload directory for Tawasol modular storage
+        add_filter( 'upload_dir', function( $dir ) use ( $user_id, $chat_id ) {
+            $base_subdir = "/tawasol/media/{$user_id}/{$chat_id}";
+            $dir['path']   = $dir['basedir'] . $base_subdir;
+            $dir['url']    = $dir['baseurl'] . $base_subdir;
+            $dir['subdir'] = $base_subdir;
+            return $dir;
+        });
 
         $upload = wp_handle_upload( $files['file'], array( 'test_form' => false ) );
 
