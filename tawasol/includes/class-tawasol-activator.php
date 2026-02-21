@@ -39,7 +39,8 @@ class Tawasol_Activator {
 			created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
 			PRIMARY KEY  (id),
 			KEY conversation_id (conversation_id),
-			KEY sender_id (sender_id)
+			KEY sender_id (sender_id),
+			KEY conv_created (conversation_id, created_at)
 		) $charset_collate;";
 
 		// Participants table
@@ -49,7 +50,8 @@ class Tawasol_Activator {
 			user_id bigint(20) NOT NULL,
 			last_read_at datetime DEFAULT CURRENT_TIMESTAMP,
 			is_admin tinyint(1) DEFAULT 0 NOT NULL,
-			PRIMARY KEY  (conversation_id, user_id)
+			PRIMARY KEY  (conversation_id, user_id),
+			KEY user_id (user_id)
 		) $charset_collate;";
 
         // Security Logs table

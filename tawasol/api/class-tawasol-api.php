@@ -201,6 +201,18 @@ class Tawasol_API {
 			'callback'            => array( $this, 'verify_otp' ),
 			'permission_callback' => array( $this, 'check_auth' ),
 		) );
+
+        register_rest_route( $this->namespace, '/sessions', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'get_sessions' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
+
+        register_rest_route( $this->namespace, '/sessions/(?P<id>\d+)', array(
+			'methods'             => 'DELETE',
+			'callback'            => array( $this, 'terminate_session' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
 	}
 
 	/**
@@ -212,6 +224,12 @@ class Tawasol_API {
         if ( ! is_user_logged_in() ) {
             return false;
         }
+
+        // Enforce HTTPS in production for E2E transmission security
+        if ( ! is_ssl() && defined('WP_DEBUG') && ! WP_DEBUG ) {
+            return new WP_Error( 'rest_forbidden', __( 'Tawasol requires HTTPS for secure communication.', 'tawasol' ), array( 'status' => 403 ) );
+        }
+
         return $this->check_rate_limit();
     }
 
@@ -478,10 +496,12 @@ class Tawasol_API {
         $table_participants = $wpdb->prefix . 'tawasol_participants';
 
         $conversations = $wpdb->get_results( $wpdb->prepare(
-            "SELECT c.* FROM $table_conversations c
+            "SELECT c.*,
+                (SELECT user_id FROM $table_participants p2 WHERE p2.conversation_id = c.id AND p2.user_id != %d LIMIT 1) as other_user_id
+             FROM $table_conversations c
              JOIN $table_participants p ON c.id = p.conversation_id
              WHERE p.user_id = %d",
-            $user_id
+            $user_id, $user_id
         ) );
 
         return new WP_REST_Response( $conversations, 200 );
@@ -672,9 +692,20 @@ class Tawasol_API {
     public function update_presence( $request ) {
         $user_id = get_current_user_id();
         $params = $request->get_params();
-        $status = $params['status'] ?? 'online'; // online, typing, offline
+        $status = $params['status'] ?? 'online';
+        $is_typing = isset( $params['is_typing'] ) ? $params['is_typing'] === 'true' : false;
+        $conversation_id = $params['conversation_id'] ?? null;
 
-        set_transient( 'tawasol_presence_' . $user_id, $status, 60 ); // Expire in 60 seconds
+        $data = array(
+            'status'    => $status,
+            'is_typing' => $is_typing,
+            'conv_id'   => $conversation_id,
+            'timestamp' => time()
+        );
+
+        set_transient( 'tawasol_presence_' . $user_id, $data, 60 );
+        wp_cache_set( 'tawasol_presence_' . $user_id, $data, 'tawasol', 60 );
+
         update_user_meta( $user_id, 'tawasol_last_seen', current_time( 'mysql' ) );
 
         return new WP_REST_Response( array( 'success' => true ), 200 );
@@ -683,6 +714,12 @@ class Tawasol_API {
     public function get_presence( $request ) {
         $user_id = $request['id'];
         $current_user_id = get_current_user_id();
+
+        // High performance lookup via cache
+        $data = wp_cache_get( 'tawasol_presence_' . $user_id, 'tawasol' );
+        if ( ! $data ) {
+            $data = get_transient( 'tawasol_presence_' . $user_id );
+        }
 
         // Check privacy
         $privacy = get_user_meta( $user_id, 'tawasol_privacy_online', true ) ?: 'everyone';
@@ -694,12 +731,13 @@ class Tawasol_API {
             return new WP_REST_Response( array( 'user_id' => $user_id, 'status' => 'hidden' ), 200 );
         }
 
-        $status = get_transient( 'tawasol_presence_' . $user_id );
         $last_seen = get_user_meta( $user_id, 'tawasol_last_seen', true );
 
         return new WP_REST_Response( array(
             'user_id'   => $user_id,
-            'status'    => $status ?: 'offline',
+            'status'    => $data['status'] ?? 'offline',
+            'is_typing' => $data['is_typing'] ?? false,
+            'conv_id'   => $data['conv_id'] ?? null,
             'last_seen' => $last_seen,
         ), 200 );
     }
@@ -1023,6 +1061,33 @@ class Tawasol_API {
             'success' => true,
             'message' => __( 'OTP sent (Simulation: ' . $otp . ')', 'tawasol' )
         ), 200 );
+    }
+
+    public function get_sessions( $request ) {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $table_sessions = $wpdb->prefix . 'tawasol_sessions';
+
+        $sessions = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, ip_address, user_agent, last_activity, created_at
+             FROM $table_sessions WHERE user_id = %d ORDER BY last_activity DESC",
+            $user_id
+        ) );
+
+        return new WP_REST_Response( $sessions, 200 );
+    }
+
+    public function terminate_session( $request ) {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $session_id = $request['id'];
+        $table_sessions = $wpdb->prefix . 'tawasol_sessions';
+
+        $wpdb->delete( $table_sessions, array( 'id' => $session_id, 'user_id' => $user_id ) );
+
+        $this->log_event( 'session_terminated', "Terminated session ID $session_id" );
+
+        return new WP_REST_Response( array( 'success' => true ), 200 );
     }
 
     public function verify_otp( $request ) {

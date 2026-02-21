@@ -46,13 +46,24 @@ class Tawasol_Auth {
     }
 
     /**
-     * Log in user
+     * Log in user and record session
      *
      * @param WP_User $user
      */
     public static function login_user( $user ) {
         wp_set_current_user( $user->ID );
         wp_set_auth_cookie( $user->ID );
+
+        // Record session
+        global $wpdb;
+        $table_sessions = $wpdb->prefix . 'tawasol_sessions';
+        $wpdb->insert( $table_sessions, array(
+            'user_id'       => $user->ID,
+            'session_token' => wp_generate_password( 64, false ),
+            'ip_address'    => $_SERVER['REMOTE_ADDR'],
+            'user_agent'    => $_SERVER['HTTP_USER_AGENT'],
+        ) );
+
         do_action( 'wp_login', $user->user_login, $user );
     }
 }

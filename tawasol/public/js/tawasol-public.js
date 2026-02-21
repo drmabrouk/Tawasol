@@ -16,6 +16,8 @@
         currentConversation: null, // ID of the currently selected conversation
         pollingInterval: null,      // Interval for fetching new messages
         presenceInterval: null,     // Interval for updating user status
+        typingTimeout: null,        // Timeout for debouncing typing indicator
+        isTyping: false,            // Current typing status
         unreadCounts: {},           // Track unread messages per conversation
         lastMessageId: 0,           // Tracking for incremental message fetching
 
@@ -207,6 +209,10 @@
             $('#tawasol-send-message-form').on('submit', function(e) {
                 e.preventDefault();
                 self.sendMessage();
+            });
+
+            $(document).on('input', '#tawasol-message-input', function() {
+                self.handleTyping();
             });
 
             $(document).on('click', '#tawasol-check-user', () => self.handleCheckUser());
@@ -554,11 +560,29 @@
             $.ajax({
                 url: tawasolVars.restUrl + '/presence',
                 method: 'POST',
-                data: { status: status },
+                data: {
+                    status: status,
+                    is_typing: this.isTyping,
+                    conversation_id: this.currentConversation
+                },
                 beforeSend: function(xhr) {
                     xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
                 }
             });
+        },
+
+        handleTyping: function() {
+            const self = this;
+            if (!this.isTyping) {
+                this.isTyping = true;
+                this.updatePresence('online');
+            }
+
+            clearTimeout(this.typingTimeout);
+            this.typingTimeout = setTimeout(() => {
+                self.isTyping = false;
+                self.updatePresence('online');
+            }, 3000);
         },
 
         /**
@@ -621,8 +645,40 @@
         },
 
         checkActivePresence: function(id) {
-            // In a real app, we'd know the other user's ID.
-            // For this demo, we'll skip complex participant mapping and just update the UI if possible.
+            const self = this;
+            // Get other participant presence
+            // In a real app, we'd have the user ID of the other person in the conversation
+            // For one-on-one, we'll assume there's one other user.
+            $.ajax({
+                url: tawasolVars.restUrl + '/conversations',
+                method: 'GET',
+                beforeSend: (xhr) => xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce),
+                success: function(conversations) {
+                    const conv = conversations.find(c => c.id == id);
+                    if (conv && conv.other_user_id) {
+                        self.fetchPresence(conv.other_user_id);
+                    }
+                }
+            });
+        },
+
+        fetchPresence: function(userId) {
+            const self = this;
+            $.ajax({
+                url: tawasolVars.restUrl + `/presence/${userId}`,
+                method: 'GET',
+                beforeSend: (xhr) => xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce),
+                success: function(res) {
+                    const info = $('.tawasol-current-chat-info');
+                    const baseTitle = $(`.tawasol-conversation-item[data-id="${self.currentConversation}"] .tawasol-conv-title`).text();
+
+                    if (res.is_typing && res.conv_id == self.currentConversation) {
+                        info.text(baseTitle + ' (typing...)');
+                    } else {
+                        info.text(baseTitle + (res.status === 'online' ? ' (Online)' : ''));
+                    }
+                }
+            });
         },
 
         /**
@@ -869,6 +925,7 @@
                 <div class="tawasol-settings-tabs">
                     <button class="tawasol-tab-btn active" data-subtab="privacy">Privacy</button>
                     <button class="tawasol-tab-btn" data-subtab="security">Security</button>
+                    <button class="tawasol-tab-btn" data-subtab="sessions">Sessions</button>
                     <button class="tawasol-tab-btn" data-subtab="notifications">Notifications</button>
                 </div>
                 <div id="tawasol-settings-sub-content" style="margin-top:20px;">
@@ -884,6 +941,10 @@
                 let subHtml = '';
                 if (subtab === 'privacy') subHtml = self.renderPrivacySettings(profile);
                 if (subtab === 'security') subHtml = self.renderSecuritySettings(profile);
+                if (subtab === 'sessions') {
+                    subHtml = self.renderSessionsSettings(profile);
+                    self.loadActiveSessions();
+                }
                 if (subtab === 'notifications') subHtml = self.renderNotificationSettings(profile);
                 $('#tawasol-settings-sub-content').html(subHtml);
             });
@@ -959,15 +1020,68 @@
                 <div class="tawasol-settings-group">
                     <h4>Security</h4>
                     <button id="tawasol-change-pin-btn" class="button">Change 6-digit PIN</button>
-                    <div style="margin-top:20px;">
-                        <h5>Active Sessions</h5>
-                        <div id="tawasol-sessions-list">Loading...</div>
-                    </div>
                     <div style="margin-top:20px; border-top:1px solid #eee; padding-top:20px;">
                         <button id="tawasol-delete-account-btn" class="button" style="color:red; border-color:red;">Delete Account</button>
                     </div>
                 </div>
             `;
+        },
+
+        renderSessionsSettings: function(profile) {
+            return `
+                <div class="tawasol-settings-group">
+                    <h4>Active Sessions</h4>
+                    <p>Manage devices logged into your account.</p>
+                    <div id="tawasol-active-sessions-list" style="margin-top:15px;">
+                        Loading sessions...
+                    </div>
+                </div>
+            `;
+        },
+
+        loadActiveSessions: function() {
+            const self = this;
+            $.ajax({
+                url: tawasolVars.restUrl + '/sessions',
+                method: 'GET',
+                beforeSend: (xhr) => xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce),
+                success: function(sessions) {
+                    const list = $('#tawasol-active-sessions-list');
+                    list.empty();
+                    if (sessions.length === 0) {
+                        list.append('<p>No active sessions found.</p>');
+                        return;
+                    }
+                    sessions.forEach(session => {
+                        list.append(`
+                            <div class="tawasol-session-item" style="padding:10px; border:1px solid var(--tawasol-border); border-radius:8px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <div style="font-weight:bold;">${self.escapeHTML(session.user_agent.substring(0, 50))}...</div>
+                                    <div style="font-size:0.8rem; opacity:0.7;">${session.ip_address} | Last active: ${session.last_activity}</div>
+                                </div>
+                                <button class="tawasol-terminate-session button" data-id="${session.id}" style="color:red;">Logout</button>
+                            </div>
+                        `);
+                    });
+
+                    $('.tawasol-terminate-session').click(function() {
+                        const id = $(this).data('id');
+                        if (confirm('Terminate this session?')) {
+                            self.terminateSession(id);
+                        }
+                    });
+                }
+            });
+        },
+
+        terminateSession: function(id) {
+            const self = this;
+            $.ajax({
+                url: tawasolVars.restUrl + `/sessions/${id}`,
+                method: 'DELETE',
+                beforeSend: (xhr) => xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce),
+                success: () => self.loadActiveSessions()
+            });
         },
 
         handleChangePinFlow: function() {
