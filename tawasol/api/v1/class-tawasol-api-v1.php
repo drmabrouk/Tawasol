@@ -114,6 +114,12 @@ class Tawasol_API_V1 {
 			'permission_callback' => array( $this, 'check_auth' ),
 		) );
 
+        register_rest_route( $this->namespace, '/messages/(?P<id>\d+)/played', array(
+			'methods'             => 'POST',
+			'callback'            => array( $this, 'mark_message_played' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
+
         register_rest_route( $this->namespace, '/presence', array(
 			'methods'             => 'POST',
 			'callback'            => array( $this, 'update_presence' ),
@@ -590,9 +596,7 @@ class Tawasol_API_V1 {
         $table_messages = $wpdb->prefix . 'tawasol_messages';
         $table_participants = $wpdb->prefix . 'tawasol_participants';
 
-        // Update message status if the recipient is reading it
-        // Actually, usually we mark all messages in a conversation as read for a user
-        $message = $wpdb->get_row( $wpdb->prepare( "SELECT conversation_id FROM $table_messages WHERE id = %d", $message_id ) );
+        $message = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table_messages WHERE id = %d", $message_id ) );
 
         if ( $message ) {
             $wpdb->update( $table_participants,
@@ -600,8 +604,31 @@ class Tawasol_API_V1 {
                 array( 'conversation_id' => $message->conversation_id, 'user_id' => $user_id )
             );
 
-            // Mark message as read in messages table (this is usually global or simplified here)
-            $wpdb->update( $table_messages, array( 'status' => 'read' ), array( 'id' => $message_id ) );
+            if ( $message->sender_id != $user_id && $message->status !== 'read' && $message->status !== 'played' ) {
+                $wpdb->update( $table_messages, array( 'status' => 'read' ), array( 'id' => $message_id ) );
+            }
+        }
+
+        return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    public function mark_message_played( $request ) {
+        global $wpdb;
+        $message_id = $request['id'];
+        $user_id = get_current_user_id();
+        $table_messages = $wpdb->prefix . 'tawasol_messages';
+
+        $message = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table_messages WHERE id = %d", $message_id ) );
+        if ( ! $message ) {
+            return new WP_Error( 'not_found', __( 'Message not found.', 'tawasol' ), array( 'status' => 404 ) );
+        }
+
+        if ( ! $this->is_participant( $message->conversation_id, $user_id ) ) {
+            return new WP_Error( 'unauthorized', __( 'Unauthorized.', 'tawasol' ), array( 'status' => 403 ) );
+        }
+
+        if ( $message->sender_id != $user_id && $message->content_type === 'voice' ) {
+             $wpdb->update( $table_messages, array( 'status' => 'played' ), array( 'id' => $message_id ) );
         }
 
         return new WP_REST_Response( array( 'success' => true ), 200 );

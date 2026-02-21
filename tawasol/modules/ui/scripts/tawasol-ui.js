@@ -21,6 +21,9 @@
         isTyping: false,            // Current typing status
         unreadCounts: {},           // Track unread messages per conversation
         lastMessageId: 0,           // Tracking for incremental message fetching
+        mediaRecorder: null,        // MediaRecorder instance for voice
+        audioChunks: [],            // Chunks of audio data
+        recordingTimer: null,       // Timer for voice recording
 
         /**
          * Initialize the application components.
@@ -156,8 +159,19 @@
                                     <button type="button" id="tawasol-attach-btn" title="Attach File">📎</button>
                                     <input type="file" id="tawasol-file-input" style="display:none;">
                                     <input type="text" id="tawasol-message-input" placeholder="${i18n.typeMessage}">
-                                    <button type="submit">${i18n.send}</button>
+                                    <div class="tawasol-input-actions">
+                                        <button type="button" id="tawasol-voice-btn" title="Record Voice">🎤</button>
+                                        <button type="submit" id="tawasol-send-btn" title="${i18n.send}">
+                                            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M1.101 21.757L23.8 12.028 1.101 2.3l.011 7.912 13.623 1.816-13.623 1.817-.011 7.912z"></path></svg>
+                                        </button>
+                                    </div>
                                 </form>
+                                <div id="tawasol-voice-recording-overlay" style="display:none; align-items:center; gap:10px; background:var(--tawasol-bg); padding:0 15px;">
+                                    <div class="tawasol-recording-indicator">🔴 <span id="tawasol-voice-timer">0:00</span></div>
+                                    <div style="flex:1;">Recording...</div>
+                                    <button type="button" id="tawasol-voice-cancel" style="background:none; border:none; color:#ea4335; cursor:pointer;">Cancel</button>
+                                    <button type="button" id="tawasol-voice-stop" style="background:var(--tawasol-primary); color:white; border:none; border-radius:50%; width:40px; height:40px; cursor:pointer;">✓</button>
+                                </div>
                             </div>
                             </div>
                         </main>
@@ -307,6 +321,18 @@
                 if ($('#tawasol-media-panel').is(':visible')) {
                     self.loadChatMedia();
                 }
+            });
+
+            $(document).on('click', '#tawasol-voice-btn', () => {
+                self.startVoiceRecording();
+            });
+
+            $(document).on('click', '#tawasol-voice-stop', () => {
+                self.stopVoiceRecording(false);
+            });
+
+            $(document).on('click', '#tawasol-voice-cancel', () => {
+                self.stopVoiceRecording(true);
             });
 
             $(document).on('click', '#tawasol-new-group-btn', () => {
@@ -653,9 +679,10 @@
                         if (conv.is_archived == 1) return; // Hide archived
                         const title = conv.title || 'Chat #' + conv.id;
                         const unreadCount = self.unreadCounts[conv.id] || 0;
+                        const avatar = conv.is_self ? '📁' : '👥';
                         list.append(`
-                            <div class="tawasol-conversation-item" data-id="${conv.id}">
-                                <div class="tawasol-conv-avatar">👥</div>
+                            <div class="tawasol-conversation-item ${conv.is_self ? 'tawasol-archives' : ''}" data-id="${conv.id}">
+                                <div class="tawasol-conv-avatar">${avatar}</div>
                                 <div class="tawasol-conv-info">
                                     <div class="tawasol-conv-title">${self.escapeHTML(title)}</div>
                                     <div class="tawasol-conv-last-msg">...</div>
@@ -808,12 +835,15 @@
             let statusIcon = '✓';
             if (msg.status === 'delivered') statusIcon = '✓✓';
             if (msg.status === 'read') statusIcon = '<span class="read">✓✓</span>';
+            if (msg.status === 'played') statusIcon = '<span class="played" style="color:#34b7f1;">✓✓</span>';
 
             let contentHtml = '';
             if (msg.content_type === 'image') {
                 contentHtml = `<img src="${msg.content}" style="max-width:100%; border-radius:10px; cursor:pointer;" onclick="window.open('${msg.content}')">`;
             } else if (msg.content_type === 'file') {
                 contentHtml = `<a href="${msg.content}" target="_blank" style="color:inherit; text-decoration:underline;">📄 Attached File</a>`;
+            } else if (msg.content_type === 'voice') {
+                contentHtml = `<audio src="${msg.content}" controls style="max-width:100%; height:35px;"></audio>`;
             } else {
                 contentHtml = self.escapeHTML(msg.content);
             }
@@ -840,6 +870,34 @@
             }
 
             self.lastMessageId = Math.max(self.lastMessageId, msg.id);
+
+            // Played status listener for voice messages
+            if (msg.content_type === 'voice' && isMe && msg.status !== 'played') {
+                const audio = list.find(`.tawasol-message[data-id="${msg.id}"] audio`)[0];
+                if (audio) {
+                    audio.onplay = () => {
+                        // In real WhatsApp, it's marked as played when the OTHER person plays it.
+                        // But for our demo, if it's sent to me, I mark it played when I play it.
+                    };
+                }
+            }
+
+            if (msg.content_type === 'voice' && !isMe && msg.status !== 'played') {
+                const audio = list.find(`.tawasol-message[data-id="${msg.id}"] audio`)[0];
+                if (audio) {
+                    audio.onplay = () => self.markAsPlayed(msg.id);
+                }
+            }
+        },
+
+        markAsPlayed: function(messageId) {
+            $.ajax({
+                url: tawasolVars.restUrl + `/messages/${messageId}/played`,
+                method: 'POST',
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
+                }
+            });
         },
 
         handleFileUpload: function(file) {
@@ -988,6 +1046,7 @@
                 let statusIcon = '✓';
                 if (update.status === 'delivered') statusIcon = '✓✓';
                 if (update.status === 'read') statusIcon = '<span class="read">✓✓</span>';
+                if (update.status === 'played') statusIcon = '<span class="played" style="color:#34b7f1;">✓✓</span>';
                 msgEl.find('.tawasol-msg-status').html(statusIcon);
             }
         },
@@ -1468,6 +1527,7 @@
         },
 
         saveProfile: function(data) {
+            const self = this;
             $.ajax({
                 url: tawasolVars.restUrl + '/profile',
                 method: 'POST',
@@ -1475,7 +1535,15 @@
                 beforeSend: function(xhr) {
                     xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
                 },
-                success: () => alert('Profile updated!')
+                success: (res) => {
+                    alert('Profile updated!');
+                    if (self.currentConversation) {
+                        const convEl = $(`.tawasol-conversation-item[data-id="${self.currentConversation}"]`);
+                        if (convEl.find('.tawasol-conv-title').text() === 'Archives') {
+                             // Refresh Archives header if needed
+                        }
+                    }
+                }
             });
         },
 
@@ -1523,6 +1591,79 @@
                 success: () => {
                     self.lastMessageId = 0;
                     self.selectConversation(self.currentConversation);
+                }
+            });
+        },
+
+        startVoiceRecording: function() {
+            const self = this;
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert('Your browser does not support voice recording.');
+                return;
+            }
+
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                self.mediaRecorder = new MediaRecorder(stream);
+                self.audioChunks = [];
+
+                self.mediaRecorder.ondataavailable = event => {
+                    self.audioChunks.push(event.data);
+                };
+
+                self.mediaRecorder.onstop = () => {
+                    if (!self.cancelRecording) {
+                        const audioBlob = new Blob(self.audioChunks, { type: 'audio/webm' });
+                        self.handleVoiceUpload(audioBlob);
+                    }
+                    stream.getTracks().forEach(track => track.stop());
+                };
+
+                self.cancelRecording = false;
+                self.mediaRecorder.start();
+
+                $('#tawasol-send-message-form').hide();
+                $('#tawasol-voice-recording-overlay').css('display', 'flex');
+
+                let seconds = 0;
+                clearInterval(self.recordingTimer);
+                self.recordingTimer = setInterval(() => {
+                    seconds++;
+                    const mins = Math.floor(seconds / 60);
+                    const secs = seconds % 60;
+                    $('#tawasol-voice-timer').text(`${mins}:${secs < 10 ? '0' : ''}${secs}`);
+                }, 1000);
+            }).catch(err => {
+                console.error('Recording error:', err);
+                alert('Could not access microphone.');
+            });
+        },
+
+        stopVoiceRecording: function(isCancel) {
+            if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                this.cancelRecording = isCancel;
+                this.mediaRecorder.stop();
+            }
+            clearInterval(this.recordingTimer);
+            $('#tawasol-voice-timer').text('0:00');
+            $('#tawasol-voice-recording-overlay').hide();
+            $('#tawasol-send-message-form').css('display', 'flex');
+        },
+
+        handleVoiceUpload: function(blob) {
+            const self = this;
+            const formData = new FormData();
+            const filename = `voice_${Date.now()}.webm`;
+            formData.append('file', blob, filename);
+
+            $.ajax({
+                url: tawasolVars.restUrl + '/messages/upload',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                beforeSend: (xhr) => xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce),
+                success: (res) => {
+                    self.sendMediaMessage(res.url, 'voice');
                 }
             });
         }

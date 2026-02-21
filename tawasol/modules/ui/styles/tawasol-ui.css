@@ -275,6 +275,11 @@
     background: rgba(255,255,255,0.2);
 }
 
+.tawasol-archives .tawasol-conv-avatar {
+    background: #eef2ff;
+    color: #6366f1;
+}
+
 .tawasol-search-result-item:hover {
     background: var(--tawasol-primary);
     color: white;
@@ -506,10 +511,44 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: transform 0.2s ease;
+}
+
+.tawasol-message-input-area button:hover {
+    transform: scale(1.1);
+}
+
+#tawasol-send-btn svg {
+    fill: var(--tawasol-primary);
 }
 
 .tawasol-message-input-area button[type="submit"] {
     color: #25D366;
+}
+
+.tawasol-input-actions {
+    display: flex;
+    gap: 5px;
+}
+
+#tawasol-voice-recording-overlay {
+    height: 50px;
+    border-radius: 25px;
+    border: 1px solid var(--tawasol-border);
+    animation: slideInUp 0.2s ease-out;
+}
+
+.tawasol-recording-indicator {
+    font-weight: bold;
+    color: #ef4444;
+}
+
+.tawasol-message audio {
+    filter: sepia(20%) saturate(70%) grayscale(1);
+}
+
+[data-theme='dark'] .tawasol-message audio {
+    filter: invert(100%) hue-rotate(180deg) brightness(1.5);
 }
 
 @keyframes fadeIn {

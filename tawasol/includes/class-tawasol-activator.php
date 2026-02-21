@@ -33,7 +33,7 @@ class Tawasol_Activator {
 			sender_id bigint(20) NOT NULL,
 			content text NOT NULL,
 			content_type enum('text', 'image', 'file', 'voice') DEFAULT 'text' NOT NULL,
-			status enum('sent', 'delivered', 'read') DEFAULT 'sent' NOT NULL,
+			status enum('sent', 'delivered', 'read', 'played') DEFAULT 'sent' NOT NULL,
 			is_pinned tinyint(1) DEFAULT 0 NOT NULL,
 			is_edited tinyint(1) DEFAULT 0 NOT NULL,
 			created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,

@@ -17,7 +17,20 @@ class Tawasol_Chat_Engine {
     }
 
     public function get_conversations( $user_id ) {
-        return $this->queries->get_user_conversations( $user_id );
+        $conversations = $this->queries->get_user_conversations( $user_id );
+        foreach ( $conversations as &$conv ) {
+            if ( $conv->type === 'one-on-one' ) {
+                if ( empty( $conv->other_user_id ) && $conv->participant_count == 1 ) {
+                    $conv->title = __( 'Archives', 'tawasol' );
+                    $conv->is_self = true;
+                } else {
+                    $other_user = get_userdata( $conv->other_user_id );
+                    $conv->title = $other_user ? $other_user->display_name : __( 'Deleted User', 'tawasol' );
+                    $conv->is_self = false;
+                }
+            }
+        }
+        return $conversations;
     }
 
     public function get_messages( $conversation_id, $user_id, $after = 0 ) {
