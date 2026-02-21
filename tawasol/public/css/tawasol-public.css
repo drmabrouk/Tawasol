@@ -1,6 +1,7 @@
 :root {
     --tawasol-primary: #2563eb;
     --tawasol-bg: #ffffff;
+    --tawasol-bg-rgb: 255, 255, 255;
     --tawasol-text: #1f2937;
     --tawasol-border: #e5e7eb;
     --tawasol-sidebar-bg: #f9fafb;
@@ -8,6 +9,7 @@
 
 [data-theme='dark'] {
     --tawasol-bg: #111827;
+    --tawasol-bg-rgb: 17, 24, 39;
     --tawasol-text: #f9fafb;
     --tawasol-border: #374151;
     --tawasol-sidebar-bg: #1f2937;
@@ -109,8 +111,28 @@
     align-items: center;
     justify-content: space-between;
     border-bottom: 1px solid var(--tawasol-border);
-    background: var(--tawasol-bg);
+    background: rgba(var(--tawasol-bg-rgb), 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.tawasol-mobile-only {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .tawasol-mobile-only {
+        display: block;
+        background: none;
+        border: none;
+        font-size: 24px;
+        color: var(--tawasol-text);
+        cursor: pointer;
+    }
 }
 
 .tawasol-brand {
@@ -128,11 +150,32 @@
 }
 
 .tawasol-sidebar {
-    width: 300px;
+    width: 340px;
     background: var(--tawasol-sidebar-bg);
     border-inline-end: 1px solid var(--tawasol-border);
     display: flex;
     flex-direction: column;
+    transition: width 0.3s ease, transform 0.3s ease;
+}
+
+.tawasol-search-box {
+    padding: 20px;
+}
+
+.tawasol-search-box input {
+    width: 100%;
+    padding: 12px 18px;
+    border: 1px solid var(--tawasol-border);
+    border-radius: 12px;
+    background: var(--tawasol-bg);
+    color: var(--tawasol-text);
+    transition: all 0.2s ease;
+}
+
+.tawasol-search-box input:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+    border-color: var(--tawasol-primary);
 }
 
 .tawasol-search-result-item {
@@ -190,11 +233,14 @@
 }
 
 .tawasol-chat-header {
-    height: 60px;
-    padding: 0 20px;
+    height: 70px;
+    padding: 0 30px;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     border-bottom: 1px solid var(--tawasol-border);
+    background: rgba(var(--tawasol-bg-rgb), 0.5);
+    backdrop-filter: blur(8px);
 }
 
 .tawasol-messages-list {
@@ -207,11 +253,18 @@
 }
 
 .tawasol-message {
-    max-width: 70%;
-    padding: 10px 15px;
-    border-radius: 18px;
+    max-width: 75%;
+    padding: 12px 18px;
+    border-radius: 22px;
     position: relative;
-    animation: fadeIn 0.3s ease;
+    animation: messageSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    line-height: 1.6;
+    font-size: 0.95rem;
+}
+
+@keyframes messageSlideUp {
+    from { opacity: 0; transform: translateY(20px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .tawasol-message.me {
@@ -227,6 +280,7 @@
     background: var(--tawasol-sidebar-bg);
     border: 1px solid var(--tawasol-border);
     border-bottom-left-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
 .tawasol-msg-meta {
@@ -326,6 +380,19 @@
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* Handle WP Admin Bar */
+.admin-bar #tawasol-chat-overlay {
+    top: 32px;
+    height: calc(100% - 32px);
+}
+
+@media screen and (max-width: 782px) {
+    .admin-bar #tawasol-chat-overlay {
+        top: 46px;
+        height: calc(100% - 46px);
+    }
+}
+
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
     .tawasol-sidebar {
@@ -333,6 +400,7 @@
         position: absolute;
         height: 100%;
         z-index: 10;
+        transform: translateX(0);
         transition: transform 0.3s ease;
     }
 
@@ -346,6 +414,10 @@
 
     .tawasol-chat-window {
         width: 100%;
+    }
+
+    .tawasol-top-bar {
+        padding: 0 15px;
     }
 }
 

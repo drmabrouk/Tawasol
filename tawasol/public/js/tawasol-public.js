@@ -1,12 +1,19 @@
 (function($) {
     'use strict';
 
+    /**
+     * Tawasol Chat Application
+     * Handles the full-screen UI, real-time messaging, and authentication flow.
+     */
     const TawasolApp = {
-        currentConversation: null,
-        pollingInterval: null,
-        presenceInterval: null,
-        lastMessageId: 0,
+        currentConversation: null, // ID of the currently selected conversation
+        pollingInterval: null,      // Interval for fetching new messages
+        presenceInterval: null,     // Interval for updating user status
+        lastMessageId: 0,           // Tracking for incremental message fetching
 
+        /**
+         * Initialize the application components.
+         */
         init: function() {
             this.renderOverlay();
             this.bindEvents();
@@ -58,6 +65,7 @@
             const html = `
                 <div id="tawasol-chat-overlay">
                     <div class="tawasol-top-bar">
+                        <button id="tawasol-mobile-menu" class="tawasol-mobile-only">☰</button>
                         <div class="tawasol-brand">Tawasol</div>
                         <div class="tawasol-top-actions">
                             <button id="tawasol-theme-toggle">🌓</button>
@@ -101,6 +109,10 @@
 
         bindEvents: function() {
             const self = this;
+
+            $(document).on('click', '#tawasol-mobile-menu', () => {
+                $('.tawasol-sidebar').toggleClass('hidden');
+            });
 
             $(document).on('click', '#tawasol-launcher', () => {
                 self.openChat();
@@ -283,6 +295,9 @@
             }
         },
 
+        /**
+         * Open the full-screen chat overlay and start background updates.
+         */
         openChat: function() {
             $('#tawasol-chat-overlay').addClass('active');
             this.loadConversations();
@@ -307,6 +322,9 @@
             });
         },
 
+        /**
+         * Fetch the list of conversations for the current user.
+         */
         loadConversations: function() {
             const self = this;
             $.ajax({
@@ -341,6 +359,10 @@
             $(`.tawasol-conversation-item[data-id="${id}"]`).addClass('active');
             $('.tawasol-messages-list').empty();
 
+            if ($(window).width() <= 768) {
+                $('.tawasol-sidebar').addClass('hidden');
+            }
+
             const title = $(`.tawasol-conversation-item[data-id="${id}"] .tawasol-conv-title`).text();
             $('.tawasol-current-chat-info').text(title);
             $('#tawasol-view-profile').show();
@@ -360,6 +382,10 @@
             // For this demo, we'll skip complex participant mapping and just update the UI if possible.
         },
 
+        /**
+         * Load messages for a specific conversation.
+         * Supports incremental polling via the 'after' parameter.
+         */
         loadMessages: function(id, isPolling = false) {
             const self = this;
             $.ajax({

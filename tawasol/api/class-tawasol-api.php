@@ -7,18 +7,32 @@
  * @subpackage        Tawasol/api
  */
 
+/**
+ * The REST API functionality of the plugin.
+ *
+ * Handles all chat-related requests, authentication, and presence updates.
+ */
 class Tawasol_API {
 
 	private $plugin_name;
 	private $version;
     private $namespace;
 
+	/**
+	 * Initialize the class and set its properties.
+	 *
+	 * @param string $plugin_name The name of this plugin.
+	 * @param string $version     The version of this plugin.
+	 */
 	public function __construct( $plugin_name, $version ) {
 		$this->plugin_name = $plugin_name;
 		$this->version = $version;
         $this->namespace = 'tawasol/v1';
 	}
 
+	/**
+	 * Register the routes for the objects of the controller.
+	 */
 	public function register_routes() {
 		register_rest_route( $this->namespace, '/auth/check-user', array(
 			'methods'             => 'POST',
@@ -99,6 +113,11 @@ class Tawasol_API {
 		) );
 	}
 
+	/**
+	 * Check if the current user has permission to perform the request.
+	 *
+	 * @return bool|WP_Error
+	 */
     public function check_auth() {
         if ( ! is_user_logged_in() ) {
             return false;
@@ -381,6 +400,12 @@ class Tawasol_API {
         return new WP_REST_Response( $messages, 200 );
     }
 
+	/**
+	 * Handle sending a new message.
+	 *
+	 * @param WP_REST_Request $request Full details about the request.
+	 * @return WP_REST_Response|WP_Error
+	 */
     public function send_message( $request ) {
         global $wpdb;
         $user_id = get_current_user_id();

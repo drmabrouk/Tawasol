@@ -10,12 +10,26 @@
  * @subpackage        Tawasol/includes
  */
 
+/**
+ * The core plugin class.
+ *
+ * This is used to define internationalization, admin-specific hooks, and
+ * public-facing site hooks.
+ */
 class Tawasol {
 
+	/** @var Tawasol_Loader $loader Orchestrates the hooks of the plugin. */
 	protected $loader;
+
+	/** @var string $plugin_name The unique identifier of this plugin. */
 	protected $plugin_name;
+
+	/** @var string $version The current version of the plugin. */
 	protected $version;
 
+	/**
+	 * Define the core functionality of the plugin.
+	 */
 	public function __construct() {
 		if ( defined( 'TAWASOL_VERSION' ) ) {
 			$this->version = TAWASOL_VERSION;
@@ -32,6 +46,9 @@ class Tawasol {
 		$this->define_shortcode_hooks();
 	}
 
+	/**
+	 * Load the required dependencies for this plugin.
+	 */
 	private function load_dependencies() {
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-tawasol-loader.php';
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-tawasol-i18n.php';
@@ -73,6 +90,9 @@ class Tawasol {
 		$this->loader->add_action( 'init', $plugin_shortcodes, 'register_shortcodes' );
 	}
 
+	/**
+	 * Run the loader to execute all of the hooks with WordPress.
+	 */
 	public function run() {
 		$this->loader->run();
 	}
