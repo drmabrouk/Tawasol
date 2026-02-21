@@ -944,12 +944,13 @@
             if (msg.status === 'played') statusIcon = '<span class="played" style="color:#34b7f1;">✓✓</span>';
 
             let contentHtml = '';
+            const mediaUrl = tawasolVars.restUrl + '/media/' + msg.id;
             if (msg.content_type === 'image') {
-                contentHtml = `<img src="${msg.content}" style="max-width:100%; border-radius:10px; cursor:pointer;" onclick="window.open('${msg.content}')">`;
+                contentHtml = `<img src="${mediaUrl}" style="max-width:100%; border-radius:10px; cursor:pointer;" onclick="window.open('${mediaUrl}')">`;
             } else if (msg.content_type === 'file') {
-                contentHtml = `<a href="${msg.content}" target="_blank" style="color:inherit; text-decoration:underline;">📄 Attached File</a>`;
+                contentHtml = `<a href="${mediaUrl}" target="_blank" style="color:inherit; text-decoration:underline;">📄 Attached File</a>`;
             } else if (msg.content_type === 'voice') {
-                contentHtml = `<audio src="${msg.content}" controls style="max-width:100%; height:35px;"></audio>`;
+                contentHtml = `<audio src="${mediaUrl}" controls style="max-width:100%; height:35px;"></audio>`;
             } else {
                 contentHtml = self.escapeHTML(msg.content);
             }
@@ -1010,14 +1011,65 @@
             const self = this;
             if (!file) return;
 
-            const tempId = 'temp-upload-' + Date.now();
+            const isImage = file.type.startsWith('image/');
+            if (isImage) {
+                this.compressImage(file, (compressedBlob) => {
+                    self.performUpload(compressedBlob, file.name);
+                });
+            } else {
+                this.performUpload(file, file.name);
+            }
+        },
+
+        compressImage: function(file, callback) {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 1200;
+                    const MAX_HEIGHT = 1200;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                        }
+                    } else {
+                        if (height > MAX_HEIGHT) {
+                            width *= MAX_HEIGHT / height;
+                            height = MAX_HEIGHT;
+                        }
+                    }
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    canvas.toBlob((blob) => {
+                        callback(blob);
+                    }, 'image/jpeg', 0.8);
+                };
+            };
+        },
+
+        performUpload: function(file, originalName) {
+            const self = this;
+            const tempId = 'temp-upload-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
             const list = $('.tawasol-messages-list');
             const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            // Show optimistic upload state
             list.append(`
                 <div class="tawasol-message me tawasol-msg-sending" data-temp-id="${tempId}">
-                    <div class="tawasol-msg-content">Uploading ${file.name}...</div>
+                    <div class="tawasol-msg-content">
+                        <div style="margin-bottom:5px;">Uploading ${originalName}...</div>
+                        <div class="tawasol-progress-bg" style="width:100%; height:4px; background:rgba(0,0,0,0.1); border-radius:2px; overflow:hidden;">
+                            <div class="tawasol-progress-bar" style="width:0%; height:100%; background:var(--tawasol-primary); transition:width 0.2s;"></div>
+                        </div>
+                    </div>
                     <div class="tawasol-msg-meta">
                         ${timestamp} <span class="tawasol-msg-status">...</span>
                     </div>
@@ -1026,7 +1078,7 @@
             list.scrollTop(list[0].scrollHeight);
 
             const formData = new FormData();
-            formData.append('file', file);
+            formData.append('file', file, originalName);
 
             $.ajax({
                 url: tawasolVars.restUrl + '/messages/upload',
@@ -1035,14 +1087,26 @@
                 processData: false,
                 contentType: false,
                 beforeSend: (xhr) => xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce),
+                xhr: function() {
+                    const xhr = new window.XMLHttpRequest();
+                    xhr.upload.addEventListener("progress", function(evt) {
+                        if (evt.lengthComputable) {
+                            const percentComplete = (evt.loaded / evt.total) * 100;
+                            $(`[data-temp-id="${tempId}"] .tawasol-progress-bar`).css('width', percentComplete + '%');
+                        }
+                    }, false);
+                    return xhr;
+                },
                 success: (res) => {
                     $(`[data-temp-id="${tempId}"]`).remove();
-                    const type = file.type.startsWith('image/') ? 'image' : 'file';
+                    const type = file.type.startsWith('image/') ? 'image' :
+                                 (file.type.startsWith('audio/') ? 'voice' : 'file');
                     self.sendMediaMessage(res.url, type);
                 },
                 error: () => {
                     const tempMsg = $(`[data-temp-id="${tempId}"]`);
                     tempMsg.removeClass('tawasol-msg-sending').addClass('tawasol-msg-failed');
+                    tempMsg.find('.tawasol-progress-bg').hide();
                     tempMsg.find('.tawasol-msg-status').text('❌');
                 }
             });
@@ -1390,26 +1454,27 @@
 
             const media = { images: [], files: [] };
             $('.tawasol-message').each(function() {
+                const id = $(this).data('id');
                 const img = $(this).find('img');
                 const link = $(this).find('a');
                 if (img.length > 0) {
-                    media.images.push(img.attr('src'));
+                    media.images.push({ src: img.attr('src'), id: id });
                 } else if (link.length > 0) {
-                    media.files.push(link[0].outerHTML);
+                    media.files.push({ html: link[0].outerHTML, id: id });
                 }
             });
 
             if (media.images.length > 0) {
                 container.append('<h5 style="margin-top:15px;">Images</h5><div class="tawasol-media-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;"></div>');
-                media.images.forEach(src => {
-                    container.find('.tawasol-media-grid').append(`<img src="${src}" style="width:100%; height:80px; object-fit:cover; border-radius:5px; cursor:pointer;" onclick="window.open('${src}')">`);
+                media.images.forEach(img => {
+                    container.find('.tawasol-media-grid').append(`<img src="${img.src}" style="width:100%; height:80px; object-fit:cover; border-radius:5px; cursor:pointer;" onclick="window.open('${img.src}')">`);
                 });
             }
 
             if (media.files.length > 0) {
                 container.append('<h5 style="margin-top:15px;">Files</h5>');
-                media.files.forEach(html => {
-                    container.append(`<div style="padding:8px; background:var(--tawasol-bg); border:1px solid var(--tawasol-border); border-radius:5px; margin-bottom:10px; font-size:0.75rem; overflow:hidden; text-overflow:ellipsis;">${html}</div>`);
+                media.files.forEach(file => {
+                    container.append(`<div style="padding:8px; background:var(--tawasol-bg); border:1px solid var(--tawasol-border); border-radius:5px; margin-bottom:10px; font-size:0.75rem; overflow:hidden; text-overflow:ellipsis;">${file.html}</div>`);
                 });
             }
 
@@ -1771,7 +1836,16 @@
             }
 
             navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-                self.mediaRecorder = new MediaRecorder(stream);
+                // Optimal high-quality compressed format
+                let options = { mimeType: 'audio/webm;codecs=opus' };
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                    options = { mimeType: 'audio/ogg;codecs=opus' };
+                    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                        options = { mimeType: 'audio/webm' };
+                    }
+                }
+
+                self.mediaRecorder = new MediaRecorder(stream, options);
                 self.audioChunks = [];
 
                 self.mediaRecorder.ondataavailable = event => {

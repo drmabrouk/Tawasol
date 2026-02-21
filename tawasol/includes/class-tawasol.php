@@ -60,6 +60,7 @@ class Tawasol {
 		// Modules
 		require_once $plugin_dir . 'modules/auth/class-tawasol-auth.php';
 		require_once $plugin_dir . 'modules/utils/class-tawasol-encryption.php';
+		require_once $plugin_dir . 'modules/utils/class-tawasol-queue.php';
 		require_once $plugin_dir . 'modules/chat/class-tawasol-chat-engine.php';
 
 		// Database
@@ -97,6 +98,13 @@ class Tawasol {
 	private function define_api_hooks() {
 		$plugin_api = new Tawasol_API_V1( $this->get_plugin_name(), $this->get_version() );
 		$this->loader->add_action( 'rest_api_init', $plugin_api, 'register_routes' );
+
+		$queue = new Tawasol_Queue();
+		$this->loader->add_action( 'tawasol_process_queue', $queue, 'process_batch' );
+
+		if ( ! wp_next_scheduled( 'tawasol_process_queue' ) ) {
+			wp_schedule_event( time(), 'every_minute', 'tawasol_process_queue' );
+		}
 	}
 
 	private function define_shortcode_hooks() {

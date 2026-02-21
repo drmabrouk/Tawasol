@@ -245,6 +245,12 @@ class Tawasol_API_V1 {
 			'callback'            => array( $this, 'local_delete_conversation' ),
 			'permission_callback' => array( $this, 'check_auth' ),
 		) );
+
+        register_rest_route( $this->namespace, '/media/(?P<id>\d+)', array(
+			'methods'             => 'GET',
+			'callback'            => array( $this, 'serve_media' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
 	}
 
 	/**
@@ -619,6 +625,52 @@ class Tawasol_API_V1 {
         }
 
         return new WP_REST_Response( array( 'success' => true ), 200 );
+    }
+
+    /**
+     * Serve media with high-performance caching headers.
+     */
+    public function serve_media( $request ) {
+        global $wpdb;
+        $message_id = $request['id'];
+        $user_id = get_current_user_id();
+        $table_messages = $wpdb->prefix . 'tawasol_messages';
+
+        $message = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table_messages WHERE id = %d", $message_id ) );
+
+        if ( ! $message || $message->content_type === 'text' ) {
+            return new WP_Error( 'not_found', __( 'Media not found.', 'tawasol' ), array( 'status' => 404 ) );
+        }
+
+        if ( ! $this->is_participant( $message->conversation_id, $user_id ) ) {
+            return new WP_Error( 'unauthorized', __( 'Unauthorized.', 'tawasol' ), array( 'status' => 403 ) );
+        }
+
+        $file_url = $message->content;
+        $file_path = str_replace( content_url(), WP_CONTENT_DIR, $file_url );
+
+        if ( ! file_exists( $file_path ) ) {
+             return new WP_Error( 'not_found', __( 'File not found on server.', 'tawasol' ), array( 'status' => 404 ) );
+        }
+
+        $mime_type = wp_check_filetype( $file_path )['type'];
+        $last_modified = filemtime( $file_path );
+        $etag = md5( $file_path . $last_modified );
+
+        // High performance headers
+        header( "Content-Type: $mime_type" );
+        header( "Cache-Control: public, max-age=31536000, immutable" );
+        header( "Expires: " . gmdate( "D, d M Y H:i:s", time() + 31536000 ) . " GMT" );
+        header( "Last-Modified: " . gmdate( "D, d M Y H:i:s", $last_modified ) . " GMT" );
+        header( "ETag: \"$etag\"" );
+
+        if ( isset( $_SERVER['HTTP_IF_NONE_MATCH'] ) && trim( $_SERVER['HTTP_IF_NONE_MATCH'], '"' ) === $etag ) {
+            header( "HTTP/1.1 304 Not Modified" );
+            exit;
+        }
+
+        readfile( $file_path );
+        exit;
     }
 
     public function mark_message_played( $request ) {
@@ -1106,17 +1158,21 @@ class Tawasol_API_V1 {
             $table_messages = $wpdb->prefix . 'tawasol_messages';
             $table_participants = $wpdb->prefix . 'tawasol_participants';
 
-            // New messages
+            // High performance query with specific indexes
             $new_messages = $wpdb->get_results( $wpdb->prepare(
                 "SELECT m.id, m.conversation_id, m.sender_id, m.content, m.content_type, m.status, m.created_at, m.is_pinned, m.is_edited
                  FROM $table_messages m
+                 FORCE INDEX (PRIMARY)
                  JOIN $table_participants p ON m.conversation_id = p.conversation_id
                  WHERE p.user_id = %d AND m.id > %d
-                 ORDER BY m.id ASC",
+                 ORDER BY m.id ASC LIMIT 20",
                 $user_id, $last_id
             ) );
 
+            $has_activity = false;
+
             if ( ! empty( $new_messages ) ) {
+                $has_activity = true;
                 foreach ( $new_messages as $msg ) {
                     if ( $msg->content_type === 'text' ) {
                         $msg->content = Tawasol_Encryption::decrypt( $msg->content );
@@ -1127,7 +1183,7 @@ class Tawasol_API_V1 {
                 }
             }
 
-            // Status updates
+            // Status updates - using msg_status_update index
             $status_updates = $wpdb->get_results( $wpdb->prepare(
                 "SELECT id, conversation_id, status FROM $table_messages
                  WHERE sender_id = %d AND updated_at > %s",
@@ -1135,6 +1191,7 @@ class Tawasol_API_V1 {
             ) );
 
             if ( ! empty( $status_updates ) ) {
+                $has_activity = true;
                 foreach ( $status_updates as $update ) {
                     echo "event: status_update\n";
                     echo "data: " . json_encode( $update ) . "\n\n";
@@ -1142,14 +1199,26 @@ class Tawasol_API_V1 {
             }
             $last_status_check = current_time( 'mysql' );
 
-            // Ping to keep connection alive
-            echo "event: ping\ndata: {\"time\": " . time() . "}\n\n";
-
+            // Flush buffer immediately for low latency
             if (ob_get_level() > 0) ob_flush();
             flush();
 
             if ( connection_aborted() ) break;
-            sleep(1);
+
+            // Adaptive polling: faster if there was recent activity
+            if ( $has_activity ) {
+                usleep( 200000 ); // 200ms
+            } else {
+                // Ping to keep connection alive every 5 seconds if idle
+                static $last_ping = 0;
+                if ( time() - $last_ping > 5 ) {
+                    echo "event: ping\ndata: {\"time\": " . time() . "}\n\n";
+                    if (ob_get_level() > 0) ob_flush();
+                    flush();
+                    $last_ping = time();
+                }
+                usleep( 800000 ); // 800ms
+            }
         }
         exit;
     }

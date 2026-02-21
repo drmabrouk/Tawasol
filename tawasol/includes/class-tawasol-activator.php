@@ -102,6 +102,21 @@ class Tawasol_Activator {
 		dbDelta( $sql_blocks );
 		dbDelta( $sql_sessions );
 
+		// Queue table for async processing
+		$table_queue = $wpdb->prefix . 'tawasol_queue';
+		$sql_queue = "CREATE TABLE $table_queue (
+			id bigint(20) NOT NULL AUTO_INCREMENT,
+			job_type varchar(100) NOT NULL,
+			payload longtext NOT NULL,
+			status enum('pending', 'processing', 'completed', 'failed') DEFAULT 'pending' NOT NULL,
+			attempts tinyint(3) DEFAULT 0 NOT NULL,
+			created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
+			updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+			PRIMARY KEY  (id),
+			KEY status (status)
+		) $charset_collate;";
+		dbDelta( $sql_queue );
+
         // Add custom capability
         $role = get_role( 'administrator' );
         if ( $role ) {
