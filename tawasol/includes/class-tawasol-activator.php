@@ -78,6 +78,43 @@ class Tawasol_Activator {
         if ( $role ) {
             $role->add_cap( 'use_tawasol' );
         }
+
+        self::create_pages();
 	}
+
+    /**
+     * Create default Tawasol pages
+     */
+    private static function create_pages() {
+        $pages = array(
+            'tawasol-login' => array(
+                'title'   => 'Tawasol Login',
+                'content' => '[tawasol_login]',
+            ),
+            'tawasol-chat' => array(
+                'title'   => 'Tawasol Chat',
+                'content' => '[tawasol_chat]',
+            ),
+        );
+
+        foreach ( $pages as $slug => $page ) {
+            $query = new WP_Query( array(
+                'post_type'      => 'page',
+                'name'           => $slug,
+                'post_status'    => 'publish',
+                'posts_per_page' => 1,
+            ) );
+
+            if ( ! $query->have_posts() ) {
+                wp_insert_post( array(
+                    'post_title'   => $page['title'],
+                    'post_content' => $page['content'],
+                    'post_status'  => 'publish',
+                    'post_type'    => 'page',
+                    'post_name'    => $slug,
+                ) );
+            }
+        }
+    }
 
 }

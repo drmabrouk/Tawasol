@@ -107,8 +107,12 @@
             });
 
             $(document).on('click', '#tawasol-close-chat', () => {
-                $('#tawasol-chat-overlay').removeClass('active');
-                clearInterval(self.pollingInterval);
+                if ($('#tawasol-login-page-trigger').length || $('#tawasol-chat-page-trigger').length) {
+                    window.location.href = tawasolVars.homeUrl;
+                } else {
+                    $('#tawasol-chat-overlay').removeClass('active');
+                    clearInterval(self.pollingInterval);
+                }
             });
 
             $('#tawasol-theme-toggle').on('click', () => {
@@ -443,6 +447,12 @@
 
         // Expose openChat to window for testing or triggers
         window.tawasolOpenChat = () => TawasolApp.openChat();
+
+        // Auto-open on dedicated pages
+        if ($('#tawasol-login-page-trigger').length || $('#tawasol-chat-page-trigger').length) {
+            TawasolApp.openChat();
+            $('#tawasol-launcher').hide(); // Hide launcher on dedicated pages to avoid redundancy
+        }
     });
 
 })(jQuery);

@@ -29,6 +29,7 @@ class Tawasol {
 		$this->define_admin_hooks();
 		$this->define_public_hooks();
 		$this->define_api_hooks();
+		$this->define_shortcode_hooks();
 	}
 
 	private function load_dependencies() {
@@ -36,6 +37,7 @@ class Tawasol {
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-tawasol-i18n.php';
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-tawasol-auth.php';
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-tawasol-encryption.php';
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-tawasol-shortcodes.php';
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/class-tawasol-admin.php';
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'public/class-tawasol-public.php';
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'api/class-tawasol-api.php';
@@ -64,6 +66,11 @@ class Tawasol {
 	private function define_api_hooks() {
 		$plugin_api = new Tawasol_API( $this->get_plugin_name(), $this->get_version() );
 		$this->loader->add_action( 'rest_api_init', $plugin_api, 'register_routes' );
+	}
+
+	private function define_shortcode_hooks() {
+		$plugin_shortcodes = new Tawasol_Shortcodes();
+		$this->loader->add_action( 'init', $plugin_shortcodes, 'register_shortcodes' );
 	}
 
 	public function run() {

@@ -27,6 +27,7 @@ class Tawasol_Public {
         // Localize script for AJAX/REST
         wp_localize_script( $this->plugin_name, 'tawasolVars', array(
             'restUrl' => esc_url_raw( rest_url( 'tawasol/v1' ) ),
+            'homeUrl' => esc_url( home_url() ),
             'nonce'   => wp_create_nonce( 'wp_rest' ),
             'userId'  => get_current_user_id(),
             'i18n'    => array(
