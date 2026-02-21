@@ -1,33 +1,38 @@
 :root {
-    --tawasol-primary: #2563eb;
+    --tawasol-primary: #25D366; /* Olive Green Brand Color */
     --tawasol-bg: #ffffff;
     --tawasol-bg-rgb: 255, 255, 255;
-    --tawasol-text: #1f2937;
-    --tawasol-border: #e5e7eb;
-    --tawasol-sidebar-bg: #f9fafb;
+    --tawasol-text: #111b21;
+    --tawasol-border: #e9edef;
+    --tawasol-sidebar-bg: #ffffff;
+    --tawasol-bubble-me: #d9fdd3;
+    --tawasol-bubble-them: #ffffff;
 }
 
 [data-theme='dark'] {
-    --tawasol-bg: #111827;
-    --tawasol-bg-rgb: 17, 24, 39;
-    --tawasol-text: #f9fafb;
-    --tawasol-border: #374151;
-    --tawasol-sidebar-bg: #1f2937;
+    --tawasol-bg: #111b21;
+    --tawasol-bg-rgb: 17, 27, 33;
+    --tawasol-text: #e9edef;
+    --tawasol-border: #222d34;
+    --tawasol-sidebar-bg: #111b21;
+    --tawasol-bubble-me: #005c4b;
+    --tawasol-bubble-them: #202c33;
 }
 
 #tawasol-chat-overlay {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
+    width: 100vw;
+    height: 100vh;
     background: var(--tawasol-bg);
     color: var(--tawasol-text);
-    z-index: 99999;
+    z-index: 1000000;
     display: none;
     flex-direction: column;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    animation: slideInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    animation: fadeIn 0.3s ease-out;
+    -webkit-font-smoothing: antialiased;
 }
 
 @keyframes slideInUp {
@@ -109,11 +114,12 @@
 .tawasol-auth-box button {
     width: 100%;
     padding: 10px;
-    background: var(--tawasol-primary);
+    background: #25D366;
     color: white;
     border: none;
     border-radius: 4px;
     cursor: pointer;
+    font-weight: 600;
 }
 
 .tawasol-top-bar {
@@ -295,53 +301,54 @@
 
 .tawasol-chat-header {
     height: 70px;
-    padding: 0 30px;
+    padding: 0 20px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     border-bottom: 1px solid var(--tawasol-border);
-    background: rgba(var(--tawasol-bg-rgb), 0.5);
-    backdrop-filter: blur(8px);
+    background: var(--tawasol-bg);
+    z-index: 10;
 }
 
 .tawasol-messages-list {
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
+    padding: 20px 7%;
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); /* Subtle pattern background */
+    background-repeat: repeat;
+    background-size: contain;
 }
 
 .tawasol-message {
-    max-width: 75%;
-    padding: 12px 18px;
-    border-radius: 22px;
+    max-width: 65%;
+    padding: 8px 12px;
+    border-radius: 12px;
     position: relative;
-    animation: messageSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    line-height: 1.6;
-    font-size: 0.95rem;
+    animation: messageFadeIn 0.2s ease-out;
+    line-height: 1.4;
+    font-size: 0.9rem;
+    box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
+    margin-bottom: 2px;
 }
 
-@keyframes messageSlideUp {
-    from { opacity: 0; transform: translateY(20px) scale(0.95); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
+@keyframes messageFadeIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
 }
 
 .tawasol-message.me {
     align-self: flex-end;
-    background: linear-gradient(135deg, var(--tawasol-primary), #6366f1);
-    color: white;
-    border-bottom-right-radius: 4px;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+    background: var(--tawasol-bubble-me);
+    color: var(--tawasol-text);
+    border-top-right-radius: 0;
 }
 
 .tawasol-message.them {
     align-self: flex-start;
-    background: var(--tawasol-sidebar-bg);
-    border: 1px solid var(--tawasol-border);
-    border-bottom-left-radius: 4px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    background: var(--tawasol-bubble-them);
+    border-top-left-radius: 0;
 }
 
 .tawasol-msg-meta {
@@ -490,12 +497,19 @@
 }
 
 .tawasol-message-input-area button {
-    background: var(--tawasol-primary);
-    color: white;
+    background: transparent;
+    color: #25D366;
     border: none;
-    padding: 10px 20px;
-    border-radius: 20px;
+    padding: 10px;
     cursor: pointer;
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tawasol-message-input-area button[type="submit"] {
+    color: #25D366;
 }
 
 @keyframes fadeIn {

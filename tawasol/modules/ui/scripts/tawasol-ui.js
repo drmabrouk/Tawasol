@@ -348,16 +348,22 @@
                 const isPinned = $(this).data('pinned') === true;
                 self.pinMessage(id, !isPinned);
             });
+
+            $(document).on('click', '.tawasol-forward-msg', function() {
+                const id = $(this).data('id');
+                alert('Forwarding message ID: ' + id + ' (Feature coming soon)');
+            });
         },
 
         showMessageOptions: function(id, x, y) {
             $('.tawasol-msg-options').remove();
             const isPinned = $(`.tawasol-message[data-id="${id}"]`).hasClass('pinned');
             const html = `
-                <div class="tawasol-msg-options" style="position:fixed; top:${y}px; left:${x}px; background:var(--tawasol-bg); border:1px solid var(--tawasol-border); z-index:1000001; padding:5px; border-radius:4px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
-                    <button class="tawasol-pin-msg" data-id="${id}" data-pinned="${isPinned}" style="display:block; width:100%; padding:5px 10px; border:none; background:none; cursor:pointer; text-align:left;">${isPinned ? 'Unpin' : 'Pin'}</button>
-                    <button class="tawasol-edit-msg" data-id="${id}" style="display:block; width:100%; padding:5px 10px; border:none; background:none; cursor:pointer; text-align:left;">Edit</button>
-                    <button class="tawasol-delete-msg" data-id="${id}" style="display:block; width:100%; padding:5px 10px; border:none; background:none; cursor:pointer; text-align:left; color:red;">Delete</button>
+                <div class="tawasol-msg-options" style="position:fixed; top:${y}px; left:${x}px; background:var(--tawasol-bg); border:1px solid var(--tawasol-border); z-index:1000001; padding:5px; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.15); min-width:150px;">
+                    <button class="tawasol-forward-msg" data-id="${id}" style="display:block; width:100%; padding:8px 12px; border:none; background:none; cursor:pointer; text-align:left; font-size:0.9rem;">Forward</button>
+                    <button class="tawasol-pin-msg" data-id="${id}" data-pinned="${isPinned}" style="display:block; width:100%; padding:8px 12px; border:none; background:none; cursor:pointer; text-align:left; font-size:0.9rem;">${isPinned ? 'Unpin' : 'Pin'}</button>
+                    <button class="tawasol-edit-msg" data-id="${id}" style="display:block; width:100%; padding:8px 12px; border:none; background:none; cursor:pointer; text-align:left; font-size:0.9rem;">Edit</button>
+                    <button class="tawasol-delete-msg" data-id="${id}" style="display:block; width:100%; padding:8px 12px; border:none; background:none; cursor:pointer; text-align:left; color:#ea4335; font-size:0.9rem;">Delete</button>
                 </div>
             `;
             $('body').append(html);
@@ -369,8 +375,9 @@
             $('.tawasol-msg-options').remove();
             const isPinned = $(`.tawasol-message[data-id="${id}"]`).hasClass('pinned');
             const html = `
-                <div class="tawasol-msg-options" style="position:fixed; top:${y}px; left:${x}px; background:var(--tawasol-bg); border:1px solid var(--tawasol-border); z-index:1000001; padding:5px; border-radius:4px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
-                    <button class="tawasol-pin-msg" data-id="${id}" data-pinned="${isPinned}" style="display:block; width:100%; padding:5px 10px; border:none; background:none; cursor:pointer; text-align:left;">${isPinned ? 'Unpin' : 'Pin'}</button>
+                <div class="tawasol-msg-options" style="position:fixed; top:${y}px; left:${x}px; background:var(--tawasol-bg); border:1px solid var(--tawasol-border); z-index:1000001; padding:5px; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.15); min-width:150px;">
+                    <button class="tawasol-forward-msg" data-id="${id}" style="display:block; width:100%; padding:8px 12px; border:none; background:none; cursor:pointer; text-align:left; font-size:0.9rem;">Forward</button>
+                    <button class="tawasol-pin-msg" data-id="${id}" data-pinned="${isPinned}" style="display:block; width:100%; padding:8px 12px; border:none; background:none; cursor:pointer; text-align:left; font-size:0.9rem;">${isPinned ? 'Unpin' : 'Pin'}</button>
                 </div>
             `;
             $('body').append(html);
@@ -663,6 +670,7 @@
         },
 
         selectConversation: function(id) {
+            const self = this;
             this.currentConversation = id;
             this.lastMessageId = 0;
             this.unreadCounts[id] = 0;
@@ -674,8 +682,25 @@
                 $('.tawasol-sidebar').addClass('hidden');
             }
 
-            const title = $(`.tawasol-conversation-item[data-id="${id}"] .tawasol-conv-title`).text();
-            $('.tawasol-current-chat-info').text(title);
+            const convEl = $(`.tawasol-conversation-item[data-id="${id}"]`);
+            const title = convEl.find('.tawasol-conv-title').text();
+
+            // Prominent Profile Integration in Chat Header
+            const headerInfo = $('.tawasol-current-chat-info');
+            headerInfo.html(`
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="width:40px; height:40px; border-radius:50%; background:#eee; display:flex; align-items:center; justify-content:center; overflow:hidden; border:1px solid var(--tawasol-border);">
+                        👤
+                    </div>
+                    <div>
+                        <div style="font-weight:600; font-size:1rem;">${this.escapeHTML(title)}</div>
+                        <div class="tawasol-header-status" style="font-size:0.75rem; opacity:0.7; display:flex; align-items:center; gap:5px;">
+                            <span class="tawasol-presence-indicator offline" style="width:8px; height:8px; border:none;"></span> Offline
+                        </div>
+                    </div>
+                </div>
+            `);
+
             $('#tawasol-view-profile').show();
             $('#tawasol-archive-btn').show();
             $('#tawasol-media-panel-btn').show();
@@ -716,26 +741,29 @@
                 method: 'GET',
                 beforeSend: (xhr) => xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce),
                 success: function(res) {
-                    const info = $('.tawasol-current-chat-info');
                     const baseTitle = $(`.tawasol-conversation-item[data-id="${self.currentConversation}"] .tawasol-conv-title`).text();
                     const indicator = $(`.tawasol-conversation-item[data-id="${self.currentConversation}"] .tawasol-presence-indicator`);
 
                     let statusClass = 'offline';
+                    let statusText = 'Offline';
                     if (res.status === 'online') {
                         statusClass = 'online';
+                        statusText = 'Online';
                     } else if (res.last_seen) {
                         const lastSeen = new Date(res.last_seen);
                         const now = new Date();
                         if (now - lastSeen < 300000) { // 5 minutes
                             statusClass = 'recent';
+                            statusText = 'Recently Offline';
                         }
                     }
                     indicator.attr('class', 'tawasol-presence-indicator ' + statusClass);
 
+                    const headerStatus = $('.tawasol-header-status');
                     if (res.is_typing && res.conv_id == self.currentConversation) {
-                        info.text(baseTitle + ' (typing...)');
+                        headerStatus.html('<span class="tawasol-presence-indicator typing" style="width:8px; height:8px; border:none;"></span> Typing...');
                     } else {
-                        info.text(baseTitle);
+                        headerStatus.html('<span class="tawasol-presence-indicator ' + statusClass + '" style="width:8px; height:8px; border:none;"></span> ' + statusText);
                     }
                 }
             });
