@@ -21,13 +21,19 @@ class Tawasol_DB_Queries {
 
     public function get_user_conversations( $user_id ) {
         global $wpdb;
+        $deleted_convs = get_user_meta( $user_id, 'tawasol_deleted_conversations', true ) ?: array();
+        $exclude_sql = "";
+        if ( ! empty( $deleted_convs ) ) {
+            $exclude_sql = " AND c.id NOT IN (" . implode( ',', array_map( 'intval', $deleted_convs ) ) . ")";
+        }
+
         return $wpdb->get_results( $wpdb->prepare(
             "SELECT c.*, p.is_archived,
                 (SELECT user_id FROM $this->table_participants p2 WHERE p2.conversation_id = c.id AND p2.user_id != %d LIMIT 1) as other_user_id,
                 (SELECT COUNT(*) FROM $this->table_participants p3 WHERE p3.conversation_id = c.id) as participant_count
              FROM $this->table_conversations c
              JOIN $this->table_participants p ON c.id = p.conversation_id
-             WHERE p.user_id = %d",
+             WHERE p.user_id = %d $exclude_sql",
             $user_id, $user_id
         ) );
     }

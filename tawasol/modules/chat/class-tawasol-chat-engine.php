@@ -75,10 +75,19 @@ class Tawasol_Chat_Engine {
 
         $message_id = $this->transactions->insert_message( $data );
         if ( $message_id ) {
-            // Unarchive for all participants upon new message
+            // Unarchive and Un-delete for all participants upon new message
             global $wpdb;
             $table_participants = $wpdb->prefix . 'tawasol_participants';
             $wpdb->update( $table_participants, array( 'is_archived' => 0 ), array( 'conversation_id' => $conversation_id ) );
+
+            $participants = $wpdb->get_col( $wpdb->prepare( "SELECT user_id FROM $table_participants WHERE conversation_id = %d", $conversation_id ) );
+            foreach ( $participants as $p_id ) {
+                $deleted_convs = get_user_meta( $p_id, 'tawasol_deleted_conversations', true ) ?: array();
+                if ( in_array( $conversation_id, $deleted_convs ) ) {
+                    $deleted_convs = array_diff( $deleted_convs, array( (int) $conversation_id ) );
+                    update_user_meta( $p_id, 'tawasol_deleted_conversations', array_values( $deleted_convs ) );
+                }
+            }
 
             do_action( 'tawasol_message_sent', $message_id, $conversation_id, $sender_id );
         }

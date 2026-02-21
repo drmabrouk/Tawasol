@@ -80,32 +80,49 @@
             const i18n = tawasolVars.i18n;
             const isDedicated = $('#tawasol-login-page-trigger').length || $('#tawasol-chat-page-trigger').length;
 
+            const icons = {
+                chat: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg>',
+                calls: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19c-.54 0-1 .45-1 .99 0 9.39 7.61 17 17 17 .54 0 .99-.45.99-.99v-3.44c0-.54-.45-.99-.99-.99z"/></svg>',
+                status: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/></svg>',
+                profile: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>',
+                settings: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>',
+                theme: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9-4.03-9-9-9zm0 16.5c-4.14 0-7.5-3.36-7.5-7.5S7.86 4.5 12 4.5s7.5 3.36 7.5 7.5-3.36 7.5-7.5 7.5z"/></svg>',
+                logout: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>',
+                close: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>',
+                attach: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.31 2.69 6 6 6s6-2.69 6-6V6h-1.5z"/></svg>',
+                voice: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>',
+                archive: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.47 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM6.24 5h11.52l.83 1H5.41l.83-1zM5 19V8h14v11H5zm11-5.5l-4 4-4-4 1.41-1.41L11 13.67V10h2v3.67l1.59-1.59L16 13.5z"/></svg>',
+                media: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>',
+                menu: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>',
+                check: '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>'
+            };
+
             const launcherHtml = isDedicated ? '' : `
                 <div id="tawasol-launcher" title="${i18n.welcome}">
-                    <span class="tawasol-launcher-icon">💬</span>
+                    <span class="tawasol-launcher-icon">${icons.chat}</span>
                 </div>
             `;
             const html = `
                 <div id="tawasol-chat-overlay" class="${isDedicated ? 'dedicated' : ''}">
                     <div class="tawasol-top-bar">
-                        <button id="tawasol-mobile-menu" class="tawasol-mobile-only">☰</button>
+                        <button id="tawasol-mobile-menu" class="tawasol-mobile-only">${icons.menu}</button>
                         <div class="tawasol-brand">Tawasol</div>
                         <div class="tawasol-top-actions">
-                            <button id="tawasol-theme-toggle">🌓</button>
-                            ${isDedicated && tawasolVars.userId != 0 ? '<button id="tawasol-logout" title="Logout">🚪</button>' : ''}
-                            ${isDedicated ? '' : '<button id="tawasol-close-chat">✖</button>'}
+                            <button id="tawasol-theme-toggle" title="Toggle Theme">${icons.theme}</button>
+                            ${isDedicated && tawasolVars.userId != 0 ? `<button id="tawasol-logout" title="Logout">${icons.logout}</button>` : ''}
+                            ${isDedicated ? '' : `<button id="tawasol-close-chat" title="Close Chat">${icons.close}</button>`}
                         </div>
                     </div>
                     <div class="tawasol-main-container">
                         <nav class="tawasol-nav-bar">
                             <div class="tawasol-nav-top">
-                                <div class="tawasol-nav-item active" data-tab="chats" title="Chats">💬</div>
-                                <div class="tawasol-nav-item" data-tab="calls" title="Calls">📞</div>
-                                <div class="tawasol-nav-item" data-tab="status" title="Status">⭕</div>
+                                <div class="tawasol-nav-item active" data-tab="chats" title="Chats">${icons.chat}</div>
+                                <div class="tawasol-nav-item" data-tab="calls" title="Calls">${icons.calls}</div>
+                                <div class="tawasol-nav-item" data-tab="status" title="Status">${icons.status}</div>
                             </div>
                             <div class="tawasol-nav-bottom">
-                                <div class="tawasol-nav-item" data-tab="profile" title="Profile">👤</div>
-                                <div class="tawasol-nav-item" data-tab="settings" title="Settings">⚙️</div>
+                                <div class="tawasol-nav-item" data-tab="profile" title="Profile">${icons.profile}</div>
+                                <div class="tawasol-nav-item" data-tab="settings" title="Settings">${icons.settings}</div>
                             </div>
                         </nav>
                         <aside class="tawasol-sidebar">
@@ -142,9 +159,9 @@
                             <div class="tawasol-chat-header">
                                 <div class="tawasol-current-chat-info">${i18n.selectConv}</div>
                                 <div class="tawasol-header-actions">
-                                    <button id="tawasol-archive-btn" style="display:none;" title="Archive Chat">📦</button>
-                                    <button id="tawasol-media-panel-btn" style="display:none;" title="View Media">🖼️</button>
-                                    <button id="tawasol-view-profile" style="display:none;">👤</button>
+                                    <button id="tawasol-archive-btn" style="display:none;" title="Archive Chat">${icons.archive}</button>
+                                    <button id="tawasol-media-panel-btn" style="display:none;" title="View Media">${icons.media}</button>
+                                    <button id="tawasol-view-profile" style="display:none;" title="View Profile">${icons.profile}</button>
                                 </div>
                             </div>
                                 <div style="flex:1; display:flex; overflow:hidden;">
@@ -159,11 +176,11 @@
                             </div>
                             <div class="tawasol-message-input-area">
                                 <form id="tawasol-send-message-form">
-                                    <button type="button" id="tawasol-attach-btn" title="Attach File">📎</button>
+                                    <button type="button" id="tawasol-attach-btn" title="Attach File">${icons.attach}</button>
                                     <input type="file" id="tawasol-file-input" style="display:none;">
                                     <input type="text" id="tawasol-message-input" placeholder="${i18n.typeMessage}">
                                     <div class="tawasol-input-actions">
-                                        <button type="button" id="tawasol-voice-btn" title="Record Voice">🎤</button>
+                                        <button type="button" id="tawasol-voice-btn" title="Record Voice">${icons.voice}</button>
                                         <button type="submit" id="tawasol-send-btn" title="${i18n.send}">
                                             <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M1.101 21.757L23.8 12.028 1.101 2.3l.011 7.912 13.623 1.816-13.623 1.817-.011 7.912z"></path></svg>
                                         </button>
@@ -173,7 +190,7 @@
                                     <div class="tawasol-recording-indicator">🔴 <span id="tawasol-voice-timer">0:00</span></div>
                                     <div style="flex:1;">Recording...</div>
                                     <button type="button" id="tawasol-voice-cancel" style="background:none; border:none; color:#ea4335; cursor:pointer;">Cancel</button>
-                                    <button type="button" id="tawasol-voice-stop" style="background:var(--tawasol-primary); color:white; border:none; border-radius:50%; width:40px; height:40px; cursor:pointer;">✓</button>
+                                    <button type="button" id="tawasol-voice-stop" style="background:var(--tawasol-primary); color:white; border:none; border-radius:50%; width:40px; height:40px; cursor:pointer;">${icons.check}</button>
                                 </div>
                             </div>
                             </div>
@@ -361,6 +378,12 @@
                 }
             });
 
+            $(document).on('contextmenu', '.tawasol-conversation-item', function(e) {
+                e.preventDefault();
+                const id = $(this).data('id');
+                self.showConversationOptions(id, e.pageX, e.pageY);
+            });
+
             $(document).on('click', '.tawasol-edit-msg', function() {
                 const id = $(this).data('id');
                 const oldContent = $(`.tawasol-message[data-id="${id}"] .tawasol-msg-content`).text();
@@ -416,6 +439,42 @@
             `;
             $('body').append(html);
             $(document).one('click', () => $('.tawasol-msg-options').remove());
+        },
+
+        showConversationOptions: function(id, x, y) {
+            const self = this;
+            $('.tawasol-msg-options').remove();
+            const html = `
+                <div class="tawasol-msg-options" style="position:fixed; top:${y}px; left:${x}px; background:var(--tawasol-bg); border:1px solid var(--tawasol-border); z-index:1000001; padding:5px; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.15); min-width:150px;">
+                    <button class="tawasol-archive-conv" data-id="${id}" style="display:block; width:100%; padding:8px 12px; border:none; background:none; cursor:pointer; text-align:left; font-size:0.9rem;">Archive</button>
+                    <button class="tawasol-delete-conv" data-id="${id}" style="display:block; width:100%; padding:8px 12px; border:none; background:none; cursor:pointer; text-align:left; color:#ea4335; font-size:0.9rem;">Delete Chat</button>
+                </div>
+            `;
+            $('body').append(html);
+
+            $('.tawasol-archive-conv').click(() => self.toggleArchive(id));
+            $('.tawasol-delete-conv').click(() => {
+                if (confirm('Are you sure you want to remove this chat from your list? Messages will be preserved in history.')) {
+                    self.localDeleteConversation(id);
+                }
+            });
+
+            $(document).one('click', () => $('.tawasol-msg-options').remove());
+        },
+
+        localDeleteConversation: function(id) {
+            const self = this;
+            $.ajax({
+                url: tawasolVars.restUrl + `/conversations/${id}/local-delete`,
+                method: 'DELETE',
+                beforeSend: (xhr) => xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce),
+                success: () => {
+                    self.loadConversations();
+                    if (self.currentConversation == id) {
+                        $('#tawasol-chat-main').hide();
+                    }
+                }
+            });
         },
 
         searchGlobalMessages: function(term) {
@@ -687,10 +746,12 @@
                         if (conv.is_archived == 1) return; // Hide archived
                         const title = conv.title || 'Chat #' + conv.id;
                         const unreadCount = self.unreadCounts[conv.id] || 0;
-                        const avatar = conv.is_self ? '📁' : '👥';
+                        const avatarIcon = conv.is_self ?
+                            '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>' :
+                            '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>';
                         list.append(`
                             <div class="tawasol-conversation-item ${conv.is_self ? 'tawasol-archives' : ''}" data-id="${conv.id}">
-                                <div class="tawasol-conv-avatar">${avatar}</div>
+                                <div class="tawasol-conv-avatar">${avatarIcon}</div>
                                 <div class="tawasol-conv-info">
                                     <div class="tawasol-conv-title">${self.escapeHTML(title)}</div>
                                     <div class="tawasol-conv-last-msg">...</div>
@@ -949,6 +1010,21 @@
             const self = this;
             if (!file) return;
 
+            const tempId = 'temp-upload-' + Date.now();
+            const list = $('.tawasol-messages-list');
+            const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            // Show optimistic upload state
+            list.append(`
+                <div class="tawasol-message me tawasol-msg-sending" data-temp-id="${tempId}">
+                    <div class="tawasol-msg-content">Uploading ${file.name}...</div>
+                    <div class="tawasol-msg-meta">
+                        ${timestamp} <span class="tawasol-msg-status">...</span>
+                    </div>
+                </div>
+            `);
+            list.scrollTop(list[0].scrollHeight);
+
             const formData = new FormData();
             formData.append('file', file);
 
@@ -960,8 +1036,14 @@
                 contentType: false,
                 beforeSend: (xhr) => xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce),
                 success: (res) => {
+                    $(`[data-temp-id="${tempId}"]`).remove();
                     const type = file.type.startsWith('image/') ? 'image' : 'file';
                     self.sendMediaMessage(res.url, type);
+                },
+                error: () => {
+                    const tempMsg = $(`[data-temp-id="${tempId}"]`);
+                    tempMsg.removeClass('tawasol-msg-sending').addClass('tawasol-msg-failed');
+                    tempMsg.find('.tawasol-msg-status').text('❌');
                 }
             });
         },
@@ -983,30 +1065,36 @@
             });
         },
 
-        sendMessage: function(retryCount = 0, manualContent = null, manualConvId = null) {
+        sendMessage: function(retryCount = 0, manualContent = null, manualConvId = null, manualType = 'text') {
             const self = this;
             const input = $('#tawasol-message-input');
             const content = manualContent || input.val();
             const convId = manualConvId || this.currentConversation;
+            const type = manualType;
 
             if (!content || !convId) return;
 
             // Optimistic UI: Append message immediately if it's a new message
             const tempId = 'temp-' + Date.now();
-            if (!manualContent) {
+            if (!manualContent || (retryCount === 0 && !manualContent)) {
                 const list = $('.tawasol-messages-list');
                 const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+                let contentHtml = self.escapeHTML(content);
+                if (type === 'image') contentHtml = `<img src="${content}" style="max-width:100%;">`;
+                if (type === 'voice') contentHtml = `<audio src="${content}" controls></audio>`;
+                if (type === 'file') contentHtml = `📄 File`;
+
                 list.append(`
                     <div class="tawasol-message me tawasol-msg-sending" data-temp-id="${tempId}">
-                        <div class="tawasol-msg-content">${self.escapeHTML(content)}</div>
+                        <div class="tawasol-msg-content">${contentHtml}</div>
                         <div class="tawasol-msg-meta">
                             ${timestamp} <span class="tawasol-msg-status">...</span>
                         </div>
                     </div>
                 `);
                 list.scrollTop(list[0].scrollHeight);
-                input.val('');
+                if (!manualContent) input.val('');
             }
 
             $.ajax({
@@ -1018,12 +1106,14 @@
                 data: {
                     conversation_id: convId,
                     content: content,
-                    content_type: 'text'
+                    content_type: type
                 },
                 success: function(res) {
                     const tempMsg = $(`[data-temp-id="${tempId}"]`);
-                    tempMsg.removeClass('tawasol-msg-sending').attr('data-id', res.message_id);
-                    tempMsg.find('.tawasol-msg-status').text('✓');
+                    if (tempMsg.length) {
+                        tempMsg.removeClass('tawasol-msg-sending').attr('data-id', res.message_id);
+                        tempMsg.find('.tawasol-msg-status').text('✓');
+                    }
                     self.lastMessageId = Math.max(self.lastMessageId, res.message_id);
 
                     // Remove from outbox if it was there
@@ -1031,17 +1121,19 @@
                     self.saveOutbox();
                 },
                 error: function() {
-                    if (retryCount < 3) {
+                    if (retryCount < 5) {
                         const delay = Math.pow(2, retryCount) * 1000;
-                        setTimeout(() => self.sendMessage(retryCount + 1, content, convId), delay);
+                        setTimeout(() => self.sendMessage(retryCount + 1, content, convId, type), delay);
                     } else {
                         const tempMsg = $(`[data-temp-id="${tempId}"]`);
-                        tempMsg.removeClass('tawasol-msg-sending').addClass('tawasol-msg-failed');
-                        tempMsg.find('.tawasol-msg-status').text('❌');
+                        if (tempMsg.length) {
+                            tempMsg.removeClass('tawasol-msg-sending').addClass('tawasol-msg-failed');
+                            tempMsg.find('.tawasol-msg-status').text('❌');
+                        }
 
-                        // Add to outbox for persistent retry
-                        if (!self.outbox.find(m => m.content === content && m.convId === convId)) {
-                            self.outbox.push({ content, convId, timestamp: Date.now() });
+                        // Add to outbox for persistent retry (only for text/media URLs, not blobs)
+                        if (typeof content === 'string' && !self.outbox.find(m => m.content === content && m.convId === convId)) {
+                            self.outbox.push({ content, convId, type, timestamp: Date.now() });
                             self.saveOutbox();
                         }
                     }
@@ -1058,7 +1150,7 @@
             setInterval(() => {
                 if (navigator.onLine && self.outbox.length > 0) {
                     const msg = self.outbox[0];
-                    self.sendMessage(0, msg.content, msg.convId);
+                    self.sendMessage(0, msg.content, msg.convId, msg.type || 'text');
                 }
             }, 10000);
         },
@@ -1188,12 +1280,13 @@
         renderProfileSettings: function(profile) {
             const self = this;
             const container = $('.tawasol-settings-content');
+            const profileIcon = '<svg viewBox="0 0 24 24" width="48" height="48" fill="#8696a0"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
             const html = `
                 <div class="tawasol-settings-group">
                     <h3>Profile</h3>
                     <div class="tawasol-profile-header" style="text-align:center; margin-bottom:20px;">
-                        <div class="tawasol-profile-photo-edit" style="width:100px; height:100px; border-radius:50%; background:#ccc; margin:0 auto 10px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:40px;">
-                            ${profile.photo ? `<img src="${profile.photo}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">` : '👤'}
+                        <div class="tawasol-profile-photo-edit" style="width:100px; height:100px; border-radius:50%; background:var(--tawasol-border); margin:0 auto 10px; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+                            ${profile.photo ? `<img src="${profile.photo}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">` : profileIcon}
                         </div>
                         <button id="tawasol-change-photo" class="button">Change Photo</button>
                     </div>
@@ -1606,13 +1699,18 @@
                     xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
                 },
                 success: (res) => {
-                    alert('Profile updated!');
+                    // Update settings UI instantly
+                    if (data.display_name) $('#tawasol-set-name').val(data.display_name);
+                    if (data.status_msg) $('#tawasol-set-status').val(data.status_msg);
+                    if (data.bio) $('#tawasol-set-bio').val(data.bio);
+
                     if (self.currentConversation) {
                         const convEl = $(`.tawasol-conversation-item[data-id="${self.currentConversation}"]`);
-                        if (convEl.find('.tawasol-conv-title').text() === 'Archives') {
-                             // Refresh Archives header if needed
+                        if (convEl.hasClass('tawasol-archives') && data.display_name) {
+                             convEl.find('.tawasol-conv-title').text(data.display_name);
                         }
                     }
+                    console.log('Profile updated successfully');
                 }
             });
         },

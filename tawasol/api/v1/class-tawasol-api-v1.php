@@ -239,6 +239,12 @@ class Tawasol_API_V1 {
 			'callback'            => array( $this, 'archive_conversation' ),
 			'permission_callback' => array( $this, 'check_auth' ),
 		) );
+
+        register_rest_route( $this->namespace, '/conversations/(?P<id>\d+)/local-delete', array(
+			'methods'             => 'DELETE',
+			'callback'            => array( $this, 'local_delete_conversation' ),
+			'permission_callback' => array( $this, 'check_auth' ),
+		) );
 	}
 
 	/**
@@ -646,6 +652,19 @@ class Tawasol_API_V1 {
         $success = $this->engine->archive_conversation( $conversation_id, $user_id, $archive );
 
         return new WP_REST_Response( array( 'success' => (bool)$success ), 200 );
+    }
+
+    public function local_delete_conversation( $request ) {
+        $conversation_id = $request['id'];
+        $user_id = get_current_user_id();
+
+        $deleted_convs = get_user_meta( $user_id, 'tawasol_deleted_conversations', true ) ?: array();
+        if ( ! in_array( $conversation_id, $deleted_convs ) ) {
+            $deleted_convs[] = (int) $conversation_id;
+            update_user_meta( $user_id, 'tawasol_deleted_conversations', $deleted_convs );
+        }
+
+        return new WP_REST_Response( array( 'success' => true ), 200 );
     }
 
     public function update_presence( $request ) {
