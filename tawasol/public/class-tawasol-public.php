@@ -18,11 +18,11 @@ class Tawasol_Public {
 	}
 
 	public function enqueue_styles() {
-		wp_enqueue_style( $this->plugin_name, plugin_dir_url( dirname( __FILE__ ) ) . 'modules/ui/styles/tawasol-ui.css', array(), $this->version, 'all' );
+		wp_enqueue_style( $this->plugin_name, plugin_dir_url( dirname( __FILE__ ) ) . 'assets/css/tawasol-ui.css', array(), $this->version, 'all' );
 	}
 
 	public function enqueue_scripts() {
-		wp_enqueue_script( $this->plugin_name, plugin_dir_url( dirname( __FILE__ ) ) . 'modules/ui/scripts/tawasol-ui.js', array( 'jquery' ), $this->version, false );
+		wp_enqueue_script( $this->plugin_name, plugin_dir_url( dirname( __FILE__ ) ) . 'assets/js/tawasol-ui.js', array( 'jquery' ), $this->version, false );
 
         // Localize script for AJAX/REST
         wp_localize_script( $this->plugin_name, 'tawasolVars', array(
@@ -50,7 +50,7 @@ class Tawasol_Public {
                 'otpSent'         => __( 'OTP sent to your registered device.', 'tawasol' ),
                 'retry'           => __( 'Retrying...', 'tawasol' ),
             ),
-            'iconUrl' => plugins_url( 'modules/ui/assets/icon.png', dirname( __FILE__ ) ),
+            'iconUrl' => plugins_url( 'assets/images/icon.png', dirname( __FILE__ ) ),
         ) );
 	}
 

@@ -24,6 +24,7 @@
         mediaRecorder: null,        // MediaRecorder instance for voice
         audioChunks: [],            // Chunks of audio data
         recordingTimer: null,       // Timer for voice recording
+        outbox: JSON.parse(localStorage.getItem('tawasol_outbox') || '[]'),
 
         /**
          * Initialize the application components.
@@ -37,6 +38,7 @@
             } else {
                 this.loadConversations();
                 this.initSSE();
+                this.startOutboxProcessor();
             }
         },
 
@@ -147,6 +149,7 @@
                             </div>
                                 <div style="flex:1; display:flex; overflow:hidden;">
                                     <div class="tawasol-messages-list">
+                                        <div id="tawasol-load-more" style="text-align:center; padding:10px; cursor:pointer; color:var(--tawasol-primary); display:none;">Load Previous Messages</div>
                                         <!-- Messages will be loaded here -->
                                     </div>
                                     <div id="tawasol-media-panel" style="display:none; width:250px; background:var(--tawasol-sidebar-bg); border-inline-start:1px solid var(--tawasol-border); overflow-y:auto; padding:15px;">
@@ -183,6 +186,11 @@
 
         bindEvents: function() {
             const self = this;
+
+            $(document).on('click', '#tawasol-load-more', () => {
+                const firstId = $('.tawasol-message').first().data('id');
+                if (firstId) self.loadPreviousMessages(self.currentConversation, firstId);
+            });
 
             $(document).on('click', '#tawasol-mobile-menu', () => {
                 $('.tawasol-sidebar').toggleClass('hidden');
@@ -805,7 +813,7 @@
             $.ajax({
                 url: tawasolVars.restUrl + `/conversations/${id}/messages`,
                 method: 'GET',
-                data: { after: this.lastMessageId },
+                data: { after: this.lastMessageId, limit: 50 },
                 beforeSend: function(xhr) {
                     xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
                 },
@@ -819,6 +827,12 @@
                         self.renderMessage(msg, list);
                     });
 
+                    if (messages.length >= 50) {
+                        $('#tawasol-load-more').show();
+                    } else if (!isPolling) {
+                        $('#tawasol-load-more').hide();
+                    }
+
                     if (shouldScroll) {
                         list.scrollTop(list[0].scrollHeight);
                     }
@@ -826,9 +840,40 @@
             });
         },
 
-        renderMessage: function(msg, list) {
+        loadPreviousMessages: function(id, beforeId) {
             const self = this;
-            if (msg.id <= self.lastMessageId) return;
+            $.ajax({
+                url: tawasolVars.restUrl + `/conversations/${id}/messages`,
+                method: 'GET',
+                data: { before: beforeId, limit: 50 },
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
+                },
+                success: function(messages) {
+                    if (messages.length === 0) {
+                        $('#tawasol-load-more').hide();
+                        return;
+                    }
+
+                    const list = $('.tawasol-messages-list');
+                    const oldHeight = list[0].scrollHeight;
+
+                    messages.reverse().forEach(msg => {
+                        self.renderMessage(msg, list, true);
+                    });
+
+                    list.scrollTop(list[0].scrollHeight - oldHeight);
+
+                    if (messages.length < 50) {
+                        $('#tawasol-load-more').hide();
+                    }
+                }
+            });
+        },
+
+        renderMessage: function(msg, list, prepend = false) {
+            const self = this;
+            if (!prepend && msg.id <= self.lastMessageId && self.lastMessageId !== 0) return;
             if ($(`.tawasol-message[data-id="${msg.id}"]`).length > 0) return;
 
             const isMe = msg.sender_id == tawasolVars.userId;
@@ -938,27 +983,31 @@
             });
         },
 
-        sendMessage: function(retryCount = 0) {
+        sendMessage: function(retryCount = 0, manualContent = null, manualConvId = null) {
             const self = this;
             const input = $('#tawasol-message-input');
-            const content = input.val();
-            if (!content || !this.currentConversation) return;
+            const content = manualContent || input.val();
+            const convId = manualConvId || this.currentConversation;
 
-            // Optimistic UI: Append message immediately
+            if (!content || !convId) return;
+
+            // Optimistic UI: Append message immediately if it's a new message
             const tempId = 'temp-' + Date.now();
-            const list = $('.tawasol-messages-list');
-            const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            if (!manualContent) {
+                const list = $('.tawasol-messages-list');
+                const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            list.append(`
-                <div class="tawasol-message me tawasol-msg-sending" data-temp-id="${tempId}">
-                    <div class="tawasol-msg-content">${self.escapeHTML(content)}</div>
-                    <div class="tawasol-msg-meta">
-                        ${timestamp} <span class="tawasol-msg-status">...</span>
+                list.append(`
+                    <div class="tawasol-message me tawasol-msg-sending" data-temp-id="${tempId}">
+                        <div class="tawasol-msg-content">${self.escapeHTML(content)}</div>
+                        <div class="tawasol-msg-meta">
+                            ${timestamp} <span class="tawasol-msg-status">...</span>
+                        </div>
                     </div>
-                </div>
-            `);
-            list.scrollTop(list[0].scrollHeight);
-            input.val('');
+                `);
+                list.scrollTop(list[0].scrollHeight);
+                input.val('');
+            }
 
             $.ajax({
                 url: tawasolVars.restUrl + '/messages',
@@ -967,7 +1016,7 @@
                     xhr.setRequestHeader('X-WP-Nonce', tawasolVars.nonce);
                 },
                 data: {
-                    conversation_id: this.currentConversation,
+                    conversation_id: convId,
                     content: content,
                     content_type: 'text'
                 },
@@ -975,22 +1024,43 @@
                     const tempMsg = $(`[data-temp-id="${tempId}"]`);
                     tempMsg.removeClass('tawasol-msg-sending').attr('data-id', res.message_id);
                     tempMsg.find('.tawasol-msg-status').text('✓');
-                    // We don't call loadMessages immediately to avoid duplication if SSE or Polling is active
-                    // But we update lastMessageId so polling doesn't fetch it again
                     self.lastMessageId = Math.max(self.lastMessageId, res.message_id);
+
+                    // Remove from outbox if it was there
+                    self.outbox = self.outbox.filter(m => m.content !== content || m.convId !== convId);
+                    self.saveOutbox();
                 },
                 error: function() {
                     if (retryCount < 3) {
                         const delay = Math.pow(2, retryCount) * 1000;
-                        setTimeout(() => self.sendMessage(retryCount + 1), delay);
+                        setTimeout(() => self.sendMessage(retryCount + 1, content, convId), delay);
                     } else {
                         const tempMsg = $(`[data-temp-id="${tempId}"]`);
                         tempMsg.removeClass('tawasol-msg-sending').addClass('tawasol-msg-failed');
                         tempMsg.find('.tawasol-msg-status').text('❌');
-                        alert('Failed to send message after multiple attempts.');
+
+                        // Add to outbox for persistent retry
+                        if (!self.outbox.find(m => m.content === content && m.convId === convId)) {
+                            self.outbox.push({ content, convId, timestamp: Date.now() });
+                            self.saveOutbox();
+                        }
                     }
                 }
             });
+        },
+
+        saveOutbox: function() {
+            localStorage.setItem('tawasol_outbox', JSON.stringify(this.outbox));
+        },
+
+        startOutboxProcessor: function() {
+            const self = this;
+            setInterval(() => {
+                if (navigator.onLine && self.outbox.length > 0) {
+                    const msg = self.outbox[0];
+                    self.sendMessage(0, msg.content, msg.convId);
+                }
+            }, 10000);
         },
 
         initSSE: function() {

@@ -33,9 +33,9 @@ class Tawasol_Chat_Engine {
         return $conversations;
     }
 
-    public function get_messages( $conversation_id, $user_id, $after = 0 ) {
+    public function get_messages( $conversation_id, $user_id, $after = 0, $before = 0, $limit = 50 ) {
         $deleted_ids = get_user_meta( $user_id, 'tawasol_deleted_messages', true ) ?: array();
-        $messages = $this->queries->get_messages( $conversation_id, $after, $deleted_ids );
+        $messages = $this->queries->get_messages( $conversation_id, $after, $before, $limit, $deleted_ids );
 
         if ( ! empty( $messages ) ) {
             $msg_ids = array();
@@ -75,6 +75,11 @@ class Tawasol_Chat_Engine {
 
         $message_id = $this->transactions->insert_message( $data );
         if ( $message_id ) {
+            // Unarchive for all participants upon new message
+            global $wpdb;
+            $table_participants = $wpdb->prefix . 'tawasol_participants';
+            $wpdb->update( $table_participants, array( 'is_archived' => 0 ), array( 'conversation_id' => $conversation_id ) );
+
             do_action( 'tawasol_message_sent', $message_id, $conversation_id, $sender_id );
         }
         return $message_id;
@@ -85,7 +90,10 @@ class Tawasol_Chat_Engine {
         if ( $type === 'one-on-one' && count($participants) === 1 ) {
             $other_user = $participants[0];
             $existing = $this->queries->find_existing_one_on_one( $creator_id, $other_user );
-            if ( $existing ) return $existing;
+            if ( $existing ) {
+                $this->transactions->set_archived( $existing, $creator_id, 0 );
+                return $existing;
+            }
         }
 
         $conv_id = $this->transactions->create_conversation( $title, $type );

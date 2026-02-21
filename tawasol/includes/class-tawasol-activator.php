@@ -41,7 +41,9 @@ class Tawasol_Activator {
 			PRIMARY KEY  (id),
 			KEY conversation_id (conversation_id),
 			KEY sender_id (sender_id),
-			KEY conv_created (conversation_id, created_at)
+			KEY conv_created (conversation_id, created_at),
+			KEY msg_status_update (sender_id, updated_at),
+			KEY msg_id_status (id, status)
 		) $charset_collate;";
 
 		// Participants table

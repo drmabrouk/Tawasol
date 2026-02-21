@@ -32,21 +32,38 @@ class Tawasol_DB_Queries {
         ) );
     }
 
-    public function get_messages( $conversation_id, $after = 0, $exclude_ids = array() ) {
+    public function get_messages( $conversation_id, $after = 0, $before = 0, $limit = 50, $exclude_ids = array() ) {
         global $wpdb;
         $exclude_sql = "";
         if ( ! empty( $exclude_ids ) ) {
             $exclude_sql = " AND m.id NOT IN (" . implode( ',', array_map( 'intval', $exclude_ids ) ) . ")";
         }
 
-        return $wpdb->get_results( $wpdb->prepare(
+        $where = $wpdb->prepare( "m.conversation_id = %d", $conversation_id );
+        if ( $after ) {
+            $where .= $wpdb->prepare( " AND m.id > %d", $after );
+            $order = "ASC";
+        } elseif ( $before ) {
+            $where .= $wpdb->prepare( " AND m.id < %d", $before );
+            $order = "DESC";
+        } else {
+            $order = "DESC";
+        }
+
+        $results = $wpdb->get_results( $wpdb->prepare(
             "SELECT m.*, u.display_name as sender_name
              FROM $this->table_messages m
              JOIN {$wpdb->users} u ON m.sender_id = u.ID
-             WHERE m.conversation_id = %d AND m.id > %d $exclude_sql
-             ORDER BY m.created_at ASC",
-            $conversation_id, $after
+             WHERE $where $exclude_sql
+             ORDER BY m.id $order LIMIT %d",
+            $limit
         ) );
+
+        if ( $order === 'DESC' ) {
+            return array_reverse( $results );
+        }
+
+        return $results;
     }
 
     public function get_recent_messages_for_user( $user_id, $limit = 500 ) {

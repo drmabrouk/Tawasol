@@ -543,7 +543,10 @@ class Tawasol_API_V1 {
         }
 
         $after = $request->get_param( 'after' ) ?: 0;
-        $messages = $this->engine->get_messages( $conversation_id, $user_id, $after );
+        $before = $request->get_param( 'before' ) ?: 0;
+        $limit = $request->get_param( 'limit' ) ?: 50;
+
+        $messages = $this->engine->get_messages( $conversation_id, $user_id, $after, $before, $limit );
 
         return new WP_REST_Response( $messages, 200 );
     }

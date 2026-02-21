@@ -25,8 +25,8 @@ class Tawasol_Admin {
 		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/tawasol-admin.js', array( 'jquery' ), $this->version, false );
 
         // Enqueue public scripts/styles for the chat overlay in admin
-        wp_enqueue_style( $this->plugin_name . '-public', plugin_dir_url( dirname( __FILE__ ) ) . 'modules/ui/styles/tawasol-ui.css', array(), $this->version, 'all' );
-        wp_enqueue_script( $this->plugin_name . '-public', plugin_dir_url( dirname( __FILE__ ) ) . 'modules/ui/scripts/tawasol-ui.js', array( 'jquery' ), $this->version, false );
+        wp_enqueue_style( $this->plugin_name . '-public', plugin_dir_url( dirname( __FILE__ ) ) . 'assets/css/tawasol-ui.css', array(), $this->version, 'all' );
+        wp_enqueue_script( $this->plugin_name . '-public', plugin_dir_url( dirname( __FILE__ ) ) . 'assets/js/tawasol-ui.js', array( 'jquery' ), $this->version, false );
 
         wp_localize_script( $this->plugin_name . '-public', 'tawasolVars', array(
             'restUrl' => esc_url_raw( rest_url( 'tawasol/v1' ) ),
@@ -53,7 +53,7 @@ class Tawasol_Admin {
                 'otpSent'         => __( 'OTP sent to your registered device.', 'tawasol' ),
                 'retry'           => __( 'Retrying...', 'tawasol' ),
             ),
-            'iconUrl' => plugins_url( 'modules/ui/assets/icon.png', dirname( dirname( __FILE__ ) ) ),
+            'iconUrl' => plugins_url( 'assets/images/icon.png', dirname( dirname( __FILE__ ) ) ),
         ) );
 	}
 
